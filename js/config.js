@@ -7,7 +7,7 @@
 const CONFIG = {
   // ── Google OAuth ────────────────────────────────────────────
   // Get this from: console.cloud.google.com → APIs & Services → Credentials
-  GOOGLE_CLIENT_ID: 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com',
+  GOOGLE_CLIENT_ID: '757651858385-u41viuii19b38eh04lu5cess9cppc8ll.apps.googleusercontent.com',
 
   // ── Family Members ──────────────────────────────────────────
   // Each person gets their own color-coded events on the calendar.
