@@ -3,11 +3,12 @@
    ============================================================ */
 
 window.Calendar = (() => {
-  let _cache     = {};
-  let _lastFetch = 0;
-  let _fetchMin  = null; // ISO string of earliest fetched date
-  let _fetchMax  = null;
-  const CACHE_MS = 5 * 60_000;
+  let _cache      = {};
+  let _eventsById = {};   // id → event object for modal lookup
+  let _lastFetch  = 0;
+  let _fetchMin   = null;
+  let _fetchMax   = null;
+  const CACHE_MS  = 5 * 60_000;
 
   let _view     = 'week';          // 'week' | 'month'
   let _viewDate = new Date();      // anchor date for current view
@@ -85,14 +86,23 @@ window.Calendar = (() => {
     const data  = await resp.json();
     const owner = CONFIG.CALENDAR_OWNERS[idx];
     return (data.items || []).map(item => ({
-      id:       item.id,
-      title:    item.summary || '(No title)',
-      allDay:   !!item.start?.date,
-      start:    item.start?.dateTime || item.start?.date,
-      end:      item.end?.dateTime   || item.end?.date,
-      color:    owner.color,
-      owner:    owner.name,
-      ownerIdx: idx,
+      id:          item.id,
+      title:       item.summary     || '(No title)',
+      allDay:      !!item.start?.date,
+      start:       item.start?.dateTime || item.start?.date,
+      end:         item.end?.dateTime   || item.end?.date,
+      color:       owner.color,
+      owner:       owner.name,
+      ownerIdx:    idx,
+      description: item.description || '',
+      location:    item.location    || '',
+      htmlLink:    item.htmlLink     || '',
+      attendees:   (item.attendees || [])
+                     .filter(a => !a.self)
+                     .map(a => a.displayName || a.email),
+      meetLink:    item.conferenceData?.entryPoints
+                     ?.find(e => e.entryPointType === 'video')?.uri || '',
+      status:      item.status || 'confirmed',
     }));
   }
 
@@ -110,7 +120,11 @@ window.Calendar = (() => {
       CONFIG.CALENDAR_OWNERS.map((_, i) => fetchEventsForOwner(i, minDate, maxDate))
     );
     _cache = {};
-    results.forEach((r, i) => { _cache[i] = r.status === 'fulfilled' ? r.value : []; });
+    _eventsById = {};
+    results.forEach((r, i) => {
+      _cache[i] = r.status === 'fulfilled' ? r.value : [];
+      _cache[i].forEach(ev => { _eventsById[ev.id] = ev; });
+    });
     _lastFetch = Date.now();
     _fetchMin  = minDate.toISOString();
     _fetchMax  = maxDate.toISOString();
@@ -180,6 +194,7 @@ window.Calendar = (() => {
             <div class="cal-event-chip-title">${escapeHtml(ev.title)}</div>
             <div class="cal-event-chip-time">${formatTime(ev.start, ev.allDay)}</div>
           `;
+          makeChipClickable(chip, ev.id);
           col.appendChild(chip);
         });
       }
@@ -239,6 +254,7 @@ window.Calendar = (() => {
           chip.className = 'cal-month-event';
           chip.style.background = ev.color;
           chip.textContent = ev.allDay ? ev.title : `${formatTime(ev.start, false)} ${ev.title}`;
+          makeChipClickable(chip, ev.id);
           cell.appendChild(chip);
         });
         if (events.length > maxShow) {
@@ -253,6 +269,124 @@ window.Calendar = (() => {
     }
 
     container.appendChild(grid);
+  }
+
+  // ── Event Detail Modal ────────────────────────────────────
+  function makeChipClickable(el, evId) {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showEventDetail(evId);
+    });
+  }
+
+  function showEventDetail(evId) {
+    const ev = _eventsById[evId];
+    if (!ev) return;
+
+    const overlay = document.getElementById('event-modal-overlay');
+    const body    = document.getElementById('event-modal-body');
+    if (!overlay || !body) return;
+
+    const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const MONTHS = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+
+    function fmtDatetime(startIso, endIso, allDay) {
+      if (allDay) {
+        const s = new Date(startIso + (startIso.length === 10 ? 'T00:00:00' : ''));
+        // end for all-day is exclusive
+        const eRaw = new Date(endIso   + (endIso.length   === 10 ? 'T00:00:00' : ''));
+        const e    = new Date(eRaw.getTime() - 86400_000); // last actual day
+        const sStr = `${DAYS[s.getDay()]}, ${MONTHS[s.getMonth()]} ${s.getDate()}`;
+        if (s.toDateString() === e.toDateString()) return sStr;
+        return `${sStr} – ${MONTHS[e.getMonth()]} ${e.getDate()}`;
+      }
+      const s = new Date(startIso);
+      const e = new Date(endIso);
+      const dateStr = `${DAYS[s.getDay()]}, ${MONTHS[s.getMonth()]} ${s.getDate()}`;
+      return `${dateStr} · ${formatTime(startIso, false)} – ${formatTime(endIso, false)}`;
+    }
+
+    function fmtDuration(startIso, endIso, allDay) {
+      if (allDay) return '';
+      const mins = Math.round((new Date(endIso) - new Date(startIso)) / 60_000);
+      if (mins < 60) return `${mins}m`;
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return m ? `${h}h ${m}m` : `${h}h`;
+    }
+
+    const when     = fmtDatetime(ev.start, ev.end, ev.allDay);
+    const duration = fmtDuration(ev.start, ev.end, ev.allDay);
+    const desc     = ev.description
+      ? ev.description.replace(/\n/g, '<br>').replace(/<(?!br)[^>]+>/g, '') // strip HTML except <br>
+      : '';
+
+    body.innerHTML = `
+      <div class="emd-header">
+        <span class="emd-color-bar" style="background:${ev.color}"></span>
+        <div class="emd-title">${escapeHtml(ev.title)}</div>
+        <button class="emd-close" onclick="Calendar.closeModal()" aria-label="Close">✕</button>
+      </div>
+
+      <div class="emd-rows">
+        <div class="emd-row">
+          <span class="emd-icon">📅</span>
+          <span class="emd-text">
+            ${escapeHtml(when)}
+            ${duration ? `<span class="emd-duration">${duration}</span>` : ''}
+          </span>
+        </div>
+
+        ${ev.owner ? `
+        <div class="emd-row">
+          <span class="emd-icon">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ev.color};vertical-align:middle"></span>
+          </span>
+          <span class="emd-text">${escapeHtml(ev.owner)}'s calendar</span>
+        </div>` : ''}
+
+        ${ev.location ? `
+        <div class="emd-row">
+          <span class="emd-icon">📍</span>
+          <span class="emd-text">${escapeHtml(ev.location)}</span>
+        </div>` : ''}
+
+        ${ev.meetLink ? `
+        <div class="emd-row">
+          <span class="emd-icon">🎥</span>
+          <a class="emd-link" href="${ev.meetLink}" target="_blank" rel="noopener">Join Google Meet</a>
+        </div>` : ''}
+
+        ${ev.attendees.length ? `
+        <div class="emd-row">
+          <span class="emd-icon">👥</span>
+          <span class="emd-text">${ev.attendees.map(escapeHtml).join(', ')}</span>
+        </div>` : ''}
+
+        ${desc ? `
+        <div class="emd-row emd-row-desc">
+          <span class="emd-icon">📝</span>
+          <span class="emd-text emd-desc">${desc}</span>
+        </div>` : ''}
+      </div>
+
+      ${ev.htmlLink ? `
+      <div class="emd-footer">
+        <a class="emd-gcal-link" href="${ev.htmlLink}" target="_blank" rel="noopener">
+          Open in Google Calendar ↗
+        </a>
+      </div>` : ''}
+    `;
+
+    overlay.classList.add('visible');
+    // Close on overlay backdrop click
+    overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+  }
+
+  function closeModal() {
+    const overlay = document.getElementById('event-modal-overlay');
+    if (overlay) overlay.classList.remove('visible');
   }
 
   // ── Public: render calendar view ──────────────────────────
@@ -303,7 +437,9 @@ window.Calendar = (() => {
               : ''}
           </div>
         </div>
+        <span class="event-detail-arrow">›</span>
       `;
+      makeChipClickable(item, ev.id);
       el.appendChild(item);
     });
   }
@@ -346,5 +482,8 @@ window.Calendar = (() => {
     }, CACHE_MS);
   }
 
-  return { render, renderTodayPanel, navigate, goToToday, setView, startAutoRefresh };
+  // Close modal on Escape
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  return { render, renderTodayPanel, navigate, goToToday, setView, startAutoRefresh, closeModal };
 })();

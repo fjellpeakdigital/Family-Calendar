@@ -1122,6 +1122,168 @@ html, body {
   flex: 1;
 }
 
+/* ── Event Detail Modal ───────────────────────────────────── */
+#event-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+#event-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.event-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  transform: scale(0.94) translateY(10px);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+
+#event-modal-overlay.visible .event-modal {
+  transform: scale(1) translateY(0);
+}
+
+/* Modal header */
+.emd-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 28px 28px 20px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.emd-color-bar {
+  width: 5px;
+  min-height: 28px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.emd-title {
+  flex: 1;
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.emd-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  margin-top: 2px;
+}
+.emd-close:hover { background: rgba(248,81,73,0.15); color: var(--danger); border-color: var(--danger); }
+
+/* Modal rows */
+.emd-rows {
+  padding: 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.emd-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.emd-icon {
+  font-size: 20px;
+  width: 28px;
+  flex-shrink: 0;
+  text-align: center;
+  margin-top: 1px;
+}
+
+.emd-text {
+  font-size: 19px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.emd-duration {
+  margin-left: 8px;
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.emd-link {
+  font-size: 19px;
+  color: var(--accent-blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+.emd-link:hover { text-decoration: underline; }
+
+.emd-row-desc { align-items: flex-start; }
+
+.emd-desc {
+  font-size: 17px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Modal footer */
+.emd-footer {
+  padding: 16px 28px 24px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.emd-gcal-link {
+  font-size: 16px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s;
+}
+.emd-gcal-link:hover { color: var(--accent-blue); }
+
+/* Arrow hint on tappable event items */
+.event-detail-arrow {
+  font-size: 20px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: 4px;
+}
+
 /* ── Theme Toggle ─────────────────────────────────────────── */
 #theme-toggle {
   width: 36px;
