@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -59,6 +59,7 @@
       </div>
 
       <div id="header-right">
+        <button id="theme-toggle" onclick="App.toggleTheme()" aria-label="Toggle light/dark theme">🌙</button>
         <div id="auth-pills">
           <!-- Auth status pills rendered by auth.js -->
         </div>
@@ -73,6 +74,14 @@
     </div>
 
   </div>
+
+  <!-- Apply saved theme immediately to avoid flash of wrong theme -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('dashboard_theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 
   <!-- Google Identity Services (must load before auth.js) -->
   <script src="https://accounts.google.com/gsi/client" async></script>

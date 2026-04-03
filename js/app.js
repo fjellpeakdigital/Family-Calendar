@@ -180,8 +180,30 @@ window.App = (() => {
     document.addEventListener('touchstart', handler, { once: true, passive: true });
   }
 
+  // ── Theme ──────────────────────────────────────────────────
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('dashboard_theme', theme);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    // Update PWA theme-color meta tag
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = theme === 'dark' ? '#0D1117' : '#EEF2F7';
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  }
+
+  function initTheme() {
+    const saved = localStorage.getItem('dashboard_theme') || 'dark';
+    applyTheme(saved);
+  }
+
   // ── Init ───────────────────────────────────────────────────
   async function init() {
+    initTheme();
     await loadPages();
 
     // Start at first page (no animation)
@@ -219,7 +241,7 @@ window.App = (() => {
     });
   }
 
-  return { init, goTo, next, prev };
+  return { init, goTo, next, prev, toggleTheme };
 })();
 
 // If auth is already done (tokens present), boot directly.

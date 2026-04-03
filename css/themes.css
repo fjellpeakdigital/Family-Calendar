@@ -2,113 +2,152 @@
    FAMILY DASHBOARD — DESIGN TOKENS & THEMES
    ============================================================ */
 
-:root {
-  /* ── Core Palette ───────────────────────────────────────── */
+/* ── Dark Theme (default) ─────────────────────────────────── */
+:root,
+[data-theme="dark"] {
   --bg-primary:    #0D1117;
   --bg-secondary:  #161B22;
   --bg-card:       #1C2333;
   --glass-bg:      rgba(255, 255, 255, 0.05);
   --glass-border:  rgba(255, 255, 255, 0.10);
 
-  /* ── Text ───────────────────────────────────────────────── */
   --text-primary:   #F0F6FC;
   --text-secondary: #8B949E;
   --text-dim:       #484F58;
 
-  /* ── Accents ────────────────────────────────────────────── */
   --accent-blue:  #58A6FF;
   --accent-pink:  #FF7EB3;
   --success:      #3FB950;
   --warning:      #D29922;
   --danger:       #F85149;
 
-  /* ── Radii ──────────────────────────────────────────────── */
   --radius-card:  16px;
   --radius-chip:  8px;
+
+  --today-num-color: #0D1117;
+  --celebration-bg:  rgba(13, 17, 23, 0.75);
 }
 
-/* ── Weather Condition Themes ─────────────────────────────── */
+/* ── Light Theme ──────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-primary:    #EEF2F7;
+  --bg-secondary:  #E2E8F0;
+  --bg-card:       #FFFFFF;
+  --glass-bg:      rgba(255, 255, 255, 0.72);
+  --glass-border:  rgba(0, 0, 0, 0.09);
 
-/* Sunny / Clear */
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-dim:       #94A3B8;
+
+  --accent-blue:  #2563EB;
+  --accent-pink:  #DB2777;
+  --success:      #16A34A;
+  --warning:      #D97706;
+  --danger:       #DC2626;
+
+  --today-num-color: #FFFFFF;
+  --celebration-bg:  rgba(240, 244, 248, 0.85);
+}
+
+/* ── Light mode: reduce backdrop-filter saturation ─────────── */
+[data-theme="light"] .card,
+[data-theme="light"] .cal-week-col,
+[data-theme="light"] .cal-month-cell,
+[data-theme="light"] .kid-header,
+[data-theme="light"] .chore-item,
+[data-theme="light"] .today-weather-current,
+[data-theme="light"] .calendar-panel-inner,
+[data-theme="light"] .today-events-list {
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+
+/* ── Dark Weather Condition Themes ───────────────────────────  */
+[data-theme="dark"] .weather-theme-sunny,
 .weather-theme-sunny {
-  background: linear-gradient(
-    160deg,
-    #1a1200 0%,
-    #2a1c00 30%,
-    #1a1a1a 70%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #1a1200 0%, #2a1c00 30%, #1a1a1a 70%, var(--bg-primary) 100%);
 }
-
+[data-theme="dark"] .weather-theme-sunny .weather-temp-big,
+[data-theme="dark"] .weather-theme-sunny .weather-icon-big,
 .weather-theme-sunny .weather-temp-big,
 .weather-theme-sunny .weather-icon-big {
   text-shadow: 0 0 60px rgba(255, 200, 50, 0.3);
 }
 
-/* Partly Cloudy */
+[data-theme="dark"] .weather-theme-partly-cloudy,
 .weather-theme-partly-cloudy {
-  background: linear-gradient(
-    160deg,
-    #0f1820 0%,
-    #182030 40%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #0f1820 0%, #182030 40%, var(--bg-primary) 100%);
 }
 
-/* Cloudy / Overcast */
+[data-theme="dark"] .weather-theme-cloudy,
 .weather-theme-cloudy {
-  background: linear-gradient(
-    160deg,
-    #111820 0%,
-    #1a2030 50%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #111820 0%, #1a2030 50%, var(--bg-primary) 100%);
 }
 
-/* Rain / Drizzle */
+[data-theme="dark"] .weather-theme-rain,
 .weather-theme-rain {
-  background: linear-gradient(
-    160deg,
-    #081018 0%,
-    #0d1a28 50%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #081018 0%, #0d1a28 50%, var(--bg-primary) 100%);
 }
-
+[data-theme="dark"] .weather-theme-rain .weather-temp-big,
 .weather-theme-rain .weather-temp-big {
   text-shadow: 0 0 60px rgba(80, 140, 220, 0.3);
 }
 
-/* Snow */
+[data-theme="dark"] .weather-theme-snow,
 .weather-theme-snow {
-  background: linear-gradient(
-    160deg,
-    #0e1220 0%,
-    #181830 50%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #0e1220 0%, #181830 50%, var(--bg-primary) 100%);
 }
 
-/* Fog / Mist */
+[data-theme="dark"] .weather-theme-fog,
 .weather-theme-fog {
-  background: linear-gradient(
-    160deg,
-    #101414 0%,
-    #1a2020 50%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #101414 0%, #1a2020 50%, var(--bg-primary) 100%);
 }
 
-/* Thunderstorm */
+[data-theme="dark"] .weather-theme-storm,
 .weather-theme-storm {
-  background: linear-gradient(
-    160deg,
-    #0a0814 0%,
-    #12101e 50%,
-    var(--bg-primary) 100%
-  );
+  background: linear-gradient(160deg, #0a0814 0%, #12101e 50%, var(--bg-primary) 100%);
 }
-
+[data-theme="dark"] .weather-theme-storm .weather-temp-big,
 .weather-theme-storm .weather-temp-big {
   text-shadow: 0 0 80px rgba(140, 80, 255, 0.3);
+}
+
+/* ── Light Weather Condition Themes ──────────────────────────  */
+[data-theme="light"] .weather-theme-sunny {
+  background: linear-gradient(160deg, #FFF7DC 0%, #FFF0B3 35%, var(--bg-primary) 100%);
+}
+[data-theme="light"] .weather-theme-sunny .weather-temp-big,
+[data-theme="light"] .weather-theme-sunny .weather-icon-big {
+  text-shadow: 0 0 40px rgba(220, 160, 0, 0.25);
+}
+
+[data-theme="light"] .weather-theme-partly-cloudy {
+  background: linear-gradient(160deg, #E8F4FD 0%, #D6EAF8 40%, var(--bg-primary) 100%);
+}
+
+[data-theme="light"] .weather-theme-cloudy {
+  background: linear-gradient(160deg, #E8EDF2 0%, #DCE3EA 50%, var(--bg-primary) 100%);
+}
+
+[data-theme="light"] .weather-theme-rain {
+  background: linear-gradient(160deg, #D6E8F6 0%, #BDD5EE 50%, var(--bg-primary) 100%);
+}
+[data-theme="light"] .weather-theme-rain .weather-temp-big {
+  text-shadow: 0 0 40px rgba(37, 99, 235, 0.2);
+}
+
+[data-theme="light"] .weather-theme-snow {
+  background: linear-gradient(160deg, #EEF0FF 0%, #E4E6FB 50%, var(--bg-primary) 100%);
+}
+
+[data-theme="light"] .weather-theme-fog {
+  background: linear-gradient(160deg, #ECEDEF 0%, #E3E5E8 50%, var(--bg-primary) 100%);
+}
+
+[data-theme="light"] .weather-theme-storm {
+  background: linear-gradient(160deg, #EAE8F5 0%, #DDD9F0 50%, var(--bg-primary) 100%);
+}
+[data-theme="light"] .weather-theme-storm .weather-temp-big {
+  text-shadow: 0 0 40px rgba(109, 40, 217, 0.2);
 }
