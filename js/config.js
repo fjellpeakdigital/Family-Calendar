@@ -13,8 +13,8 @@ const CONFIG = {
   // Each person gets their own color-coded events on the calendar.
   // 'email' must match their Google account email.
   CALENDAR_OWNERS: [
-    { name: 'Chris', color: '#58A6FF', email: 'chris@example.com' },
-    { name: 'Kayla', color: '#FF7EB3', email: 'kayla@example.com' },
+    { name: 'Chris', color: '#58A6FF', email: 'cjones.eco@gmail.com' },
+    { name: 'Kayla', color: '#FF7EB3', email: 'jones.b.kayla@gmail.com' },
   ],
 
   // ── Location (for weather) ──────────────────────────────────
