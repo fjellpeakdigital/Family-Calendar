@@ -146,6 +146,53 @@ window.Weather = (() => {
     }
   }
 
+  // ── Render compact panel for Today page ───────────────────
+  function renderTodayPanel() {
+    if (!_data) return;
+    const c = _data.current;
+    const d = _data.daily;
+
+    const panel = document.getElementById('today-weather-current');
+    if (panel) {
+      panel.className = `today-weather-current card ${getThemeClass(c.weather_code)}`;
+    }
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+    set('today-weather-icon',     getIcon(c.weather_code));
+    set('today-weather-temp',     `${Math.round(c.temperature_2m)}°`);
+    set('today-weather-cond',     getLabel(c.weather_code));
+    set('today-weather-feels',    `Feels like ${Math.round(c.apparent_temperature)}°`);
+    set('today-weather-city',     CONFIG.LOCATION.city);
+    set('today-weather-humidity', `💧 ${c.relative_humidity_2m}%`);
+    set('today-weather-wind',     `💨 ${Math.round(c.wind_speed_10m)} mph`);
+
+    const minsAgo = _fetchedAt ? Math.round((Date.now() - _fetchedAt) / 60_000) : 0;
+    set('today-weather-updated', minsAgo < 2 ? 'Just updated' : `Updated ${minsAgo} min ago`);
+
+    // Forecast strip (5 days, compact)
+    const strip = document.getElementById('today-forecast-strip');
+    if (strip && d.time) {
+      strip.innerHTML = '';
+      const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      d.time.slice(0, 5).forEach((dateStr, i) => {
+        const dt    = new Date(dateStr + 'T12:00:00');
+        const label = i === 0 ? 'Today' : dayNames[dt.getDay()];
+        const precip = d.precipitation_sum[i];
+        const card  = document.createElement('div');
+        card.className = 'forecast-card';
+        card.innerHTML = `
+          <div class="forecast-day">${label}</div>
+          <div class="forecast-icon">${getIcon(d.weather_code[i])}</div>
+          <div class="forecast-high">${Math.round(d.temperature_2m_max[i])}°</div>
+          <div class="forecast-low">${Math.round(d.temperature_2m_min[i])}°</div>
+          ${precip > 0.01 ? `<div class="forecast-precip">${precip.toFixed(2)}"</div>` : ''}
+        `;
+        strip.appendChild(card);
+      });
+    }
+  }
+
   // ── Public API ─────────────────────────────────────────────
   async function render(force = false) {
     if (!force && _data && Date.now() - _fetchedAt < CACHE_MS) {
@@ -177,5 +224,13 @@ window.Weather = (() => {
     }, CACHE_MS);
   }
 
-  return { render, startAutoRefresh };
+  // expose renderTodayPanel for Today page + ensure data is fetched first
+  async function renderTodayPanelWithFetch(force = false) {
+    if (!_data || force) {
+      try { _data = await fetchWeather(); _fetchedAt = Date.now(); } catch (e) { console.error(e); }
+    }
+    renderTodayPanel();
+  }
+
+  return { render, renderTodayPanel: renderTodayPanelWithFetch, startAutoRefresh };
 })();

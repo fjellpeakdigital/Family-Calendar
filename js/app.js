@@ -83,7 +83,10 @@ window.App = (() => {
   function renderPage(name) {
     switch (name) {
       case 'calendar': Calendar.render(); break;
-      case 'weather':  Weather.render();  break;
+      case 'today':
+        Calendar.renderTodayPanel();
+        Weather.renderTodayPanel();
+        break;
       case 'chores':   Chores.render();   break;
     }
   }
@@ -209,6 +212,11 @@ window.App = (() => {
     Calendar.startAutoRefresh();
     Weather.startAutoRefresh();
     Chores.startMidnightReset();
+
+    // Re-render the active page when it comes back into focus (e.g. token refreshed)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) renderPage(CONFIG.PAGES[_currentPage]);
+    });
   }
 
   return { init, goTo, next, prev };

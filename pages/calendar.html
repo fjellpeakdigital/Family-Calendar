@@ -1,30 +1,21 @@
-<!-- Calendar Page Template -->
+<!-- Calendar Page — Week / Month view -->
 <div id="calendar-page" class="page-content">
 
-  <!-- Left: Today's Agenda (40%) -->
-  <div class="calendar-panel">
-    <div class="calendar-panel-inner">
-      <div class="section-label today-label">Today</div>
-      <div id="today-events-list" class="today-events-list">
-        <div class="loading-wrap">
-          <div class="spinner"></div>
-          <span>Loading calendar…</span>
-        </div>
-      </div>
+  <!-- Toolbar -->
+  <div class="cal-toolbar">
+    <button class="cal-nav-btn" onclick="Calendar.navigate(-1)" aria-label="Previous">&#8249;</button>
+    <button class="cal-today-btn" onclick="Calendar.goToToday()">Today</button>
+    <button class="cal-nav-btn" onclick="Calendar.navigate(1)" aria-label="Next">&#8250;</button>
+
+    <div class="cal-toolbar-title" id="cal-view-title"></div>
+
+    <div class="cal-view-toggle">
+      <button class="cal-toggle-btn active" id="btn-week"  onclick="Calendar.setView('week')">Week</button>
+      <button class="cal-toggle-btn"        id="btn-month" onclick="Calendar.setView('month')">Month</button>
     </div>
   </div>
 
-  <!-- Right: Upcoming 2 Weeks (60%) -->
-  <div class="calendar-panel">
-    <div class="calendar-panel-inner">
-      <div class="section-label">Upcoming</div>
-      <div id="upcoming-events-list" class="upcoming-list">
-        <div class="loading-wrap">
-          <div class="spinner"></div>
-          <span>Loading events…</span>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- View container — filled by calendar.js -->
+  <div id="cal-view-container"></div>
 
 </div>

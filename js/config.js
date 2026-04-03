@@ -22,7 +22,7 @@ const CONFIG = {
   LOCATION: { lat: 43.1979, lon: -70.8737, city: 'Dover, NH' },
 
   // ── Pages to show (in order) ────────────────────────────────
-  PAGES: ['calendar', 'weather', 'chores'],
+  PAGES: ['calendar', 'today', 'chores'],
 
   // ── Kids & Chores ───────────────────────────────────────────
   // days: which days of the week the chore is required

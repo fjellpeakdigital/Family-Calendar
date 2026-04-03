@@ -1,0 +1,34 @@
+<!-- Today Page — Today's events + compact weather -->
+<div id="today-page" class="page-content">
+
+  <!-- Left: Today's Events -->
+  <div class="today-left">
+    <div class="section-label">Today's Events</div>
+    <div id="today-events-panel" class="today-events-list">
+      <div class="loading-wrap">
+        <div class="spinner"></div>
+        <span>Loading…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Weather -->
+  <div class="today-right">
+    <div id="today-weather-current" class="today-weather-current card">
+      <div id="today-weather-icon" class="today-weather-icon">⛅</div>
+      <div id="today-weather-temp" class="today-weather-temp">--°</div>
+      <div id="today-weather-cond" class="today-weather-cond">Loading weather…</div>
+      <div id="today-weather-feels" class="today-weather-feels"></div>
+      <div id="today-weather-meta" class="today-weather-meta">
+        <span id="today-weather-city"></span>
+        <span id="today-weather-updated"></span>
+        <span id="today-weather-humidity"></span>
+        <span id="today-weather-wind"></span>
+      </div>
+    </div>
+    <div id="today-forecast-strip" class="today-forecast-strip">
+      <!-- Populated by weather.js -->
+    </div>
+  </div>
+
+</div>
