@@ -46,9 +46,6 @@ window.Auth = (() => {
         client_id:    CONFIG.GOOGLE_CLIENT_ID,
         scope:        'https://www.googleapis.com/auth/calendar.readonly',
         hint:         owner.email,
-        // redirect_uri must be registered in Google Cloud Console under
-        // "Authorized redirect URIs" (used as fallback when popups are blocked)
-        redirect_uri: location.origin + location.pathname,
         callback: (tokenResponse) => {
           if (tokenResponse.error) {
             console.error('GIS token error:', tokenResponse);
@@ -101,7 +98,6 @@ window.Auth = (() => {
         client_id:    CONFIG.GOOGLE_CLIENT_ID,
         scope:        'https://www.googleapis.com/auth/calendar.readonly',
         hint:         owner.email,
-        redirect_uri: location.origin + location.pathname,
         callback: (tokenResponse) => {
           if (tokenResponse.error) {
             console.warn(`Silent re-auth failed for ${owner.name}:`, tokenResponse.error);
