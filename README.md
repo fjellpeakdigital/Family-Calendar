@@ -30,11 +30,11 @@ A beautiful always-on family display for a wall-mounted tablet — shows your fa
    - Back on the credentials page, click **+ Create Credentials → OAuth client ID** again
 4. Application type: **Web application**
 5. Name it anything (e.g. "Family Dashboard Web")
-6. Under **Authorized redirect URIs**, click **Add URI** and enter your GitHub Pages URL:
+6. Under **Authorized JavaScript origins**, click **Add URI** and enter your GitHub Pages origin (no path, no trailing slash):
    ```
-   https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPO-NAME/
+   https://YOUR-GITHUB-USERNAME.github.io
    ```
-   Also add `http://localhost:8080/` if you want to test locally
+   Also add `http://localhost:8080` if you want to test locally
 7. Click **Create**
 8. Copy the **Client ID** (looks like `123456789.apps.googleusercontent.com`)
 
@@ -97,7 +97,7 @@ Add as many kids as you have. Valid day abbreviations: `Mon`, `Tue`, `Wed`, `Thu
    ```
    https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPO-NAME/
    ```
-5. **Important**: Go back to your Google Cloud OAuth credentials and make sure this exact URL is in the **Authorized redirect URIs** list
+5. **Important**: Go back to your Google Cloud OAuth credentials and make sure `https://YOUR-GITHUB-USERNAME.github.io` is in the **Authorized JavaScript origins** list (not redirect URIs)
 
 ---
 
@@ -132,8 +132,8 @@ Edit the `lat` and `lon` values in `js/config.js`. You can get exact coordinates
 
 **"Sign In" button does nothing or gives an error**
 - Make sure `GOOGLE_CLIENT_ID` in `config.js` is set correctly (not the placeholder)
-- Check that your GitHub Pages URL is listed in the OAuth credential's **Authorized redirect URIs**
-- Make sure you're opening the app from the exact URL you registered (with or without trailing slash matters)
+- In Google Cloud Console, go to **APIs & Services → Credentials** and click your OAuth Client ID. Under **Authorized JavaScript origins** (not redirect URIs), add your GitHub Pages URL, e.g. `https://YOUR-USERNAME.github.io`. No trailing slash. Also add `http://localhost:8080` for local testing.
+- The app uses the Google Identity Services Token Client, which needs your domain listed under **JavaScript origins**, not redirect URIs.
 
 **Chores reset at the wrong time**
 Chores automatically reset each day at midnight in the tablet's local time zone. If the tablet's clock is wrong, chores may reset at an unexpected time. Check the tablet's date/time settings.
