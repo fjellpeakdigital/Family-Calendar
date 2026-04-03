@@ -1,0 +1,114 @@
+/* ============================================================
+   FAMILY DASHBOARD — DESIGN TOKENS & THEMES
+   ============================================================ */
+
+:root {
+  /* ── Core Palette ───────────────────────────────────────── */
+  --bg-primary:    #0D1117;
+  --bg-secondary:  #161B22;
+  --bg-card:       #1C2333;
+  --glass-bg:      rgba(255, 255, 255, 0.05);
+  --glass-border:  rgba(255, 255, 255, 0.10);
+
+  /* ── Text ───────────────────────────────────────────────── */
+  --text-primary:   #F0F6FC;
+  --text-secondary: #8B949E;
+  --text-dim:       #484F58;
+
+  /* ── Accents ────────────────────────────────────────────── */
+  --accent-blue:  #58A6FF;
+  --accent-pink:  #FF7EB3;
+  --success:      #3FB950;
+  --warning:      #D29922;
+  --danger:       #F85149;
+
+  /* ── Radii ──────────────────────────────────────────────── */
+  --radius-card:  16px;
+  --radius-chip:  8px;
+}
+
+/* ── Weather Condition Themes ─────────────────────────────── */
+
+/* Sunny / Clear */
+.weather-theme-sunny {
+  background: linear-gradient(
+    160deg,
+    #1a1200 0%,
+    #2a1c00 30%,
+    #1a1a1a 70%,
+    var(--bg-primary) 100%
+  );
+}
+
+.weather-theme-sunny .weather-temp-big,
+.weather-theme-sunny .weather-icon-big {
+  text-shadow: 0 0 60px rgba(255, 200, 50, 0.3);
+}
+
+/* Partly Cloudy */
+.weather-theme-partly-cloudy {
+  background: linear-gradient(
+    160deg,
+    #0f1820 0%,
+    #182030 40%,
+    var(--bg-primary) 100%
+  );
+}
+
+/* Cloudy / Overcast */
+.weather-theme-cloudy {
+  background: linear-gradient(
+    160deg,
+    #111820 0%,
+    #1a2030 50%,
+    var(--bg-primary) 100%
+  );
+}
+
+/* Rain / Drizzle */
+.weather-theme-rain {
+  background: linear-gradient(
+    160deg,
+    #081018 0%,
+    #0d1a28 50%,
+    var(--bg-primary) 100%
+  );
+}
+
+.weather-theme-rain .weather-temp-big {
+  text-shadow: 0 0 60px rgba(80, 140, 220, 0.3);
+}
+
+/* Snow */
+.weather-theme-snow {
+  background: linear-gradient(
+    160deg,
+    #0e1220 0%,
+    #181830 50%,
+    var(--bg-primary) 100%
+  );
+}
+
+/* Fog / Mist */
+.weather-theme-fog {
+  background: linear-gradient(
+    160deg,
+    #101414 0%,
+    #1a2020 50%,
+    var(--bg-primary) 100%
+  );
+}
+
+/* Thunderstorm */
+.weather-theme-storm {
+  background: linear-gradient(
+    160deg,
+    #0a0814 0%,
+    #12101e 50%,
+    var(--bg-primary) 100%
+  );
+}
+
+.weather-theme-storm .weather-temp-big {
+  text-shadow: 0 0 80px rgba(140, 80, 255, 0.3);
+}
