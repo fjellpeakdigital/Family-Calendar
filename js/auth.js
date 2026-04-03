@@ -43,9 +43,12 @@ window.Auth = (() => {
 
     return new Promise((resolve) => {
       const client = google.accounts.oauth2.initTokenClient({
-        client_id: CONFIG.GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/calendar.readonly',
-        hint: owner.email,
+        client_id:    CONFIG.GOOGLE_CLIENT_ID,
+        scope:        'https://www.googleapis.com/auth/calendar.readonly',
+        hint:         owner.email,
+        // redirect_uri must be registered in Google Cloud Console under
+        // "Authorized redirect URIs" (used as fallback when popups are blocked)
+        redirect_uri: location.origin + location.pathname,
         callback: (tokenResponse) => {
           if (tokenResponse.error) {
             console.error('GIS token error:', tokenResponse);
