@@ -85,7 +85,68 @@ window.Auth = (() => {
     });
   }
 
-  // ── Reauth (alias, same flow) ─────────────────────────────
+  // ── Silent token refresh ──────────────────────────────────
+  // Called proactively before a token expires. Uses prompt:'' so
+  // Google skips the consent/account-chooser UI when the browser
+  // still has an active Google session — the callback fires
+  // silently and the new token is saved without user interaction.
+  // Falls back to showing the reauth banner if the session is gone.
+  async function silentReauth(idx) {
+    await waitForGIS();
+    const owner = CONFIG.CALENDAR_OWNERS[idx];
+    console.log(`Silent re-auth attempt for ${owner.name}…`);
+
+    return new Promise((resolve) => {
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id:    CONFIG.GOOGLE_CLIENT_ID,
+        scope:        'https://www.googleapis.com/auth/calendar.readonly',
+        hint:         owner.email,
+        redirect_uri: location.origin + location.pathname,
+        callback: (tokenResponse) => {
+          if (tokenResponse.error) {
+            console.warn(`Silent re-auth failed for ${owner.name}:`, tokenResponse.error);
+            checkReauthNeeded(); // surface banner if truly expired
+            resolve(false);
+            return;
+          }
+          saveToken(idx, {
+            access_token: tokenResponse.access_token,
+            expires_at:   Date.now() + (tokenResponse.expires_in - 60) * 1000,
+            email:        owner.email,
+            name:         owner.name,
+          });
+          console.log(`Silent re-auth OK for ${owner.name}`);
+          renderAuthPills();
+          resolve(true);
+        },
+        error_callback: (err) => {
+          console.warn(`Silent re-auth error for ${owner.name}:`, err);
+          checkReauthNeeded();
+          resolve(false);
+        },
+      });
+
+      // prompt:'' → skip consent/account-chooser if session still valid
+      client.requestAccessToken({ prompt: '' });
+    });
+  }
+
+  // Checks every 5 min; if a token expires within 10 min, silently refreshes it.
+  function startSilentRefreshLoop() {
+    setInterval(async () => {
+      for (let i = 0; i < CONFIG.CALENDAR_OWNERS.length; i++) {
+        const tok = loadToken(i);
+        if (!tok) continue;
+        const expiresIn = tok.expires_at - Date.now();
+        // Refresh if expiring within 10 minutes but not already expired
+        if (expiresIn > 0 && expiresIn < 10 * 60_000) {
+          await silentReauth(i);
+        }
+      }
+      checkReauthNeeded();
+    }, 5 * 60_000);
+  }
+
   function reauth(idx) {
     startAuth(idx);
   }
@@ -218,11 +279,11 @@ window.Auth = (() => {
       document.getElementById('setup-splash').style.display = 'flex';
     }
 
-    // Re-check token health every 5 min
-    setInterval(checkReauthNeeded, 5 * 60_000);
+    // Proactive silent refresh + health check every 5 min
+    startSilentRefreshLoop();
   }
 
-  return { init, startAuth, reauth, finishSetup, getToken, isTokenValid, allConnected, renderAuthPills, checkReauthNeeded };
+  return { init, startAuth, reauth, silentReauth, finishSetup, getToken, isTokenValid, allConnected, renderAuthPills, checkReauthNeeded };
 })();
 
 document.addEventListener('DOMContentLoaded', () => Auth.init());
