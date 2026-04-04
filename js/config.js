@@ -29,23 +29,21 @@ const CONFIG = {
   // Valid day names: 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
   KIDS: [
     {
-      name: 'Kid 1',
-      avatar: '🧒',
+      name: 'Colette',
       chores: [
         { task: 'Make bed',    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
         { task: 'Brush teeth', days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
         { task: 'Clean room',  days: ['Sat'] },
-        { task: 'Set table',   days: ['Mon','Wed','Fri'] },
+        { task: 'Empty Dishwasher',   days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
       ]
     },
     {
-      name: 'Kid 2',
-      avatar: '👧',
+      name: 'Theo',
       chores: [
         { task: 'Make bed',    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
         { task: 'Brush teeth', days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
-        { task: 'Feed pet',    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
-        { task: 'Vacuum',      days: ['Sun'] },
+        { task: 'Feed Cats',    days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
+        { task: 'Empty Bathroom Trash',      days: ['Sun'] },
       ]
     }
   ],
