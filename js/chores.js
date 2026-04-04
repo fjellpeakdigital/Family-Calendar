@@ -74,7 +74,6 @@ window.Chores = (() => {
     const header = document.createElement('div');
     header.className = 'kid-header';
     header.innerHTML = `
-      <div class="kid-avatar">${kid.avatar}</div>
       <div class="kid-name">${escapeHtml(kid.name)}</div>
       <div class="kid-progress-text">${doneCount} / ${chores.length} done</div>
       <div class="progress-bar-wrap">
@@ -118,7 +117,6 @@ window.Chores = (() => {
       const overlay = document.createElement('div');
       overlay.className = 'celebration-overlay';
       overlay.innerHTML = `
-        <div style="font-size:60px">${kid.avatar}</div>
         <div class="celebration-text">🎉 Amazing, ${escapeHtml(kid.name)}!</div>
         <div style="font-size:18px;color:var(--text-secondary)">All done for today!</div>
       `;
