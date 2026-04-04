@@ -1454,8 +1454,107 @@ html, body {
 }
 
 /* ── Responsive for narrower tablets ─────────────────────── */
+/* ── Portrait tablet (≤ 900px wide) ───────────────────────── */
 @media (max-width: 900px) {
-  #clock { font-size: 56px; }
-  .weather-temp-big { font-size: 110px; }
-  #calendar-page { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+
+  /* Header — tighter, smaller clock */
+  #header {
+    padding: 8px 16px 6px;
+    gap: 8px;
+  }
+  #header-left  { min-width: 0; }
+  #header-right { min-width: 0; }
+  #clock {
+    font-size: 44px;
+    letter-spacing: -1px;
+  }
+  #date-display {
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  #page-title { font-size: 11px; letter-spacing: 2px; }
+  .auth-pill span:last-child { display: none; }   /* hide name, keep dot */
+  .auth-pill { padding: 4px 6px; gap: 0; }
+  #theme-toggle { font-size: 18px; padding: 4px 6px; }
+
+  /* Today page — stack vertically */
+  #today-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 12px;
+    padding: 14px 16px;
+    overflow-y: auto;
+  }
+  .today-left { overflow: hidden; }
+  .today-right {
+    flex-direction: row;
+    flex-shrink: 0;
+    height: 220px;
+    overflow: hidden;
+  }
+  .today-weather-current {
+    flex: 1;
+    padding: 12px;
+    gap: 2px;
+  }
+  .today-weather-icon  { font-size: 36px; }
+  .today-weather-temp  { font-size: 56px; letter-spacing: -2px; }
+  .today-weather-cond  { font-size: 15px; }
+  .today-weather-feels { font-size: 13px; }
+  .today-weather-meta  { font-size: 12px; gap: 4px; }
+  .today-forecast-strip {
+    flex-direction: column;
+    flex: 0 0 130px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .today-forecast-strip .forecast-card {
+    flex: 0 0 auto;
+  }
+
+  /* Calendar toolbar — compact */
+  #calendar-page {
+    padding: 8px 12px 12px;
+    gap: 8px;
+  }
+  .cal-toolbar { gap: 6px; }
+  .cal-toolbar-title { font-size: 15px; }
+  .cal-toggle-btn { padding: 5px 10px; font-size: 12px; }
+  .cal-nav-btn { font-size: 22px; padding: 2px 8px; }
+  .cal-today-btn { font-size: 12px; padding: 5px 10px; }
+
+  /* Calendar time grid — readable in portrait */
+  .cal-tgrid-dayname { font-size: 10px; letter-spacing: 0.5px; }
+  .cal-tgrid-daynum  { width: 26px; height: 26px; font-size: 13px; }
+  .cal-tgrid-axis-label { font-size: 10px; }
+  .cal-tgrid-event { font-size: 10px; padding: 2px 4px; }
+
+  /* Month view — tighter cells */
+  .cal-month-dow  { font-size: 10px; padding: 3px 4px; }
+  .cal-month-cell { padding: 3px 4px; }
+  .cal-month-date { font-size: 11px; }
+  .cal-month-event { font-size: 10px; padding: 1px 4px; }
+
+  /* Chores — stack kids vertically, scrollable */
+  #chores-page {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 16px;
+    gap: 12px;
+    height: 100%;
+  }
+  .kid-column {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  .kid-header {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .kid-name { font-size: 18px; }
+  .progress-bar-wrap { flex: 1; min-width: 80px; }
+  .chore-list { max-height: 300px; overflow-y: auto; }
 }
