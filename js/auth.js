@@ -145,8 +145,10 @@ window.Auth = (() => {
       });
 
       client.requestAccessToken({
-        // Force account picker for new accounts; silent for known emails
-        prompt: hintEmail ? '' : 'select_account',
+        // 'consent' forces the full scope approval dialog, ensuring
+        // openid/email/profile are granted so userinfo works.
+        // For reconnects with a known email, silent is fine.
+        prompt: hintEmail ? '' : 'consent',
       });
     });
   }
