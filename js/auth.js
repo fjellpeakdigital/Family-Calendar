@@ -90,7 +90,8 @@ window.Auth = (() => {
     return new Promise((resolve) => {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.GOOGLE_CLIENT_ID,
-        scope:     'https://www.googleapis.com/auth/calendar.readonly',
+        // Include email/profile so we can identify the account via userinfo
+        scope:     'https://www.googleapis.com/auth/calendar.readonly openid email profile',
         hint:      hintEmail || undefined,
         callback:  async (tokenResponse) => {
           if (tokenResponse.error) {
@@ -105,7 +106,17 @@ window.Auth = (() => {
               'https://www.googleapis.com/oauth2/v3/userinfo',
               { headers: { Authorization: `Bearer ${tokenResponse.access_token}` } }
             );
+            if (!infoResp.ok) {
+              console.error('userinfo returned', infoResp.status);
+              resolve(false);
+              return;
+            }
             const info = await infoResp.json();
+            if (!info.email) {
+              console.error('userinfo missing email:', info);
+              resolve(false);
+              return;
+            }
             const tok = {
               access_token: tokenResponse.access_token,
               expires_at:   Date.now() + (tokenResponse.expires_in - 60) * 1000,
@@ -146,7 +157,7 @@ window.Auth = (() => {
     return new Promise((resolve) => {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.GOOGLE_CLIENT_ID,
-        scope:     'https://www.googleapis.com/auth/calendar.readonly',
+        scope:     'https://www.googleapis.com/auth/calendar.readonly openid email profile',
         hint:      email,
         callback:  async (tokenResponse) => {
           if (tokenResponse.error) {
