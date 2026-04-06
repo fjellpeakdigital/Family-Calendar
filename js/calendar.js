@@ -123,42 +123,67 @@ window.Calendar = (() => {
   }
 
   // ── Fetch ──────────────────────────────────────────────────
-  async function fetchEventsForOwner(idx, minDate, maxDate) {
-    const tok = Auth.getToken(idx);
-    if (!Auth.isTokenValid(tok)) return [];
+  // Reads fd_cal_assignments + fd_people from localStorage so the
+  // calendar works without any changes to config.js.
+  function _getPeople() {
+    try { return JSON.parse(localStorage.getItem('fd_people')) || []; } catch { return []; }
+  }
+  function _getAssignments() {
+    try { return JSON.parse(localStorage.getItem('fd_cal_assignments')) || []; } catch { return []; }
+  }
 
-    const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
-    url.searchParams.set('timeMin',      minDate.toISOString());
-    url.searchParams.set('timeMax',      maxDate.toISOString());
-    url.searchParams.set('singleEvents', 'true');
-    url.searchParams.set('orderBy',      'startTime');
-    url.searchParams.set('maxResults',   '200');
+  // Fetch events for all calendars assigned under one account token
+  async function fetchEventsForToken(tok, minDate, maxDate) {
+    if (!Auth.isValid(tok)) return [];
 
-    const resp = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${tok.access_token}` },
-    });
-    if (!resp.ok) { console.error(`Calendar fetch ${idx}:`, resp.status); return []; }
+    const assignments = _getAssignments().filter(a => a.accountEmail === tok.email);
+    if (assignments.length === 0) return [];
 
-    const data  = await resp.json();
-    const owner = CONFIG.CALENDAR_OWNERS[idx];
-    return (data.items || []).map(item => ({
-      id:          item.id,
-      title:       item.summary     || '(No title)',
-      allDay:      !!item.start?.date,
-      start:       item.start?.dateTime || item.start?.date,
-      end:         item.end?.dateTime   || item.end?.date,
-      color:       owner.color,
-      owner:       owner.name,
-      ownerIdx:    idx,
-      description: item.description || '',
-      location:    item.location    || '',
-      htmlLink:    item.htmlLink    || '',
-      attendees:   (item.attendees || [])
-                     .filter(a => !a.self)
-                     .map(a => a.displayName || a.email),
-      meetLink:    item.conferenceData?.entryPoints
-                     ?.find(e => e.entryPointType === 'video')?.uri || '',
-    }));
+    const people = _getPeople();
+    const allEvents = [];
+
+    for (const assignment of assignments) {
+      const person = people.find(p => p.id === assignment.personId);
+      if (!person) continue;
+
+      const calId = encodeURIComponent(assignment.calendarId);
+      const url   = new URL(
+        `https://www.googleapis.com/calendar/v3/calendars/${calId}/events`
+      );
+      url.searchParams.set('timeMin',      minDate.toISOString());
+      url.searchParams.set('timeMax',      maxDate.toISOString());
+      url.searchParams.set('singleEvents', 'true');
+      url.searchParams.set('orderBy',      'startTime');
+      url.searchParams.set('maxResults',   '200');
+
+      try {
+        const resp = await Auth.apiFetch(tok, url.toString());
+        if (!resp.ok) { console.error(`Calendar fetch (${tok.email} / ${assignment.calendarId}):`, resp.status); continue; }
+        const data = await resp.json();
+
+        const events = (data.items || []).map(item => ({
+          id:          item.id,
+          title:       item.summary     || '(No title)',
+          allDay:      !!item.start?.date,
+          start:       item.start?.dateTime || item.start?.date,
+          end:         item.end?.dateTime   || item.end?.date,
+          color:       person.color,
+          owner:       person.name,
+          description: item.description || '',
+          location:    item.location    || '',
+          htmlLink:    item.htmlLink    || '',
+          attendees:   (item.attendees || [])
+                         .filter(a => !a.self)
+                         .map(a => a.displayName || a.email),
+          meetLink:    item.conferenceData?.entryPoints
+                         ?.find(e => e.entryPointType === 'video')?.uri || '',
+        }));
+        allEvents.push(...events);
+      } catch (e) {
+        console.error(`Calendar fetch error (${tok.email}):`, e);
+      }
+    }
+    return allEvents;
   }
 
   async function fetchAll(force = false) {
@@ -169,8 +194,9 @@ window.Calendar = (() => {
                         && _fetchMax === maxDate.toISOString();
     if (!force && alreadyCurrent && Date.now() - _lastFetch < CACHE_MS) return;
 
+    const tokens  = Auth.getValidTokens();
     const results = await Promise.allSettled(
-      CONFIG.CALENDAR_OWNERS.map((_, i) => fetchEventsForOwner(i, minDate, maxDate))
+      tokens.map(tok => fetchEventsForToken(tok, minDate, maxDate))
     );
     _cache = {}; _eventsById = {};
     results.forEach((r, i) => {
@@ -555,8 +581,7 @@ window.Calendar = (() => {
         <div class="event-body">
           <div class="event-title">${escapeHtml(ev.title)}</div>
           <div class="event-time">${formatTime(ev.start, ev.allDay)}
-            ${CONFIG.CALENDAR_OWNERS.length > 1
-              ? `<span class="event-who"> · ${escapeHtml(ev.owner)}</span>` : ''}
+            ${ev.owner ? `<span class="event-who"> · ${escapeHtml(ev.owner)}</span>` : ''}
           </div>
         </div>
         <span class="event-detail-arrow">›</span>

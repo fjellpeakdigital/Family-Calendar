@@ -1,23 +1,69 @@
 /* ============================================================
-   app.js — App shell: routing, swipe nav, clock, glue
+   app.js — App shell: routing, swipe nav, clock, boot
    ============================================================ */
 
 window.App = (() => {
-  let _currentPage = 0;
-  let _pageCount   = 0;
-  let _autoTimer   = null;
+  let _currentPage  = 0;
+  let _pageCount    = 0;
+  let _autoTimer    = null;
   let _renderedPages = new Set();
 
-  // ── Load Page HTML into track ─────────────────────────────
+  // ── One-time migration: seed fd_people / fd_chore_data ───
+  // Runs on first boot from CONFIG.CALENDAR_OWNERS + CONFIG.KIDS.
+  // After first run these live in localStorage and are managed
+  // via the ⚙ admin panel — config.js never needs to be edited again.
+  function migrateConfigData() {
+    if (localStorage.getItem('fd_people')) return; // already migrated
+
+    const people    = [];
+    const choreData = {};
+    const assignments = [];
+
+    // Adults from CALENDAR_OWNERS
+    (CONFIG.CALENDAR_OWNERS || []).forEach(owner => {
+      const id = crypto.randomUUID();
+      people.push({ id, name: owner.name, color: owner.color, emoji: '👤', type: 'adult' });
+      // Seed a 'primary' calendar assignment so existing users see events immediately
+      assignments.push({ calendarId: 'primary', accountEmail: owner.email, personId: id });
+    });
+
+    // Kids from KIDS
+    (CONFIG.KIDS || []).forEach(kid => {
+      const id = crypto.randomUUID();
+      people.push({ id, name: kid.name, color: kid.color || '#3FB950', emoji: '🧒', type: 'kid' });
+      choreData[id] = (kid.chores || []).map(c => ({
+        id:   crypto.randomUUID(),
+        task: c.task,
+        days: c.days,
+      }));
+    });
+
+    localStorage.setItem('fd_people',          JSON.stringify(people));
+    localStorage.setItem('fd_chore_data',       JSON.stringify(choreData));
+    localStorage.setItem('fd_cal_assignments',  JSON.stringify(assignments));
+    console.log('Migrated config data to localStorage');
+  }
+
+  // ── Apply saved settings ──────────────────────────────────
+  function applySavedSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('fd_settings') || '{}');
+      if (saved.LOCATION)                CONFIG.LOCATION = saved.LOCATION;
+      if (saved.TIME_FORMAT_24H != null)  CONFIG.TIME_FORMAT_24H = saved.TIME_FORMAT_24H;
+      if (saved.CALENDAR_LOOKAHEAD_DAYS)  CONFIG.CALENDAR_LOOKAHEAD_DAYS = saved.CALENDAR_LOOKAHEAD_DAYS;
+    } catch {}
+  }
+
+  // ── Load Page HTML ────────────────────────────────────────
   async function loadPages() {
     const track = document.getElementById('page-track');
     track.innerHTML = '';
     _pageCount = CONFIG.PAGES.length;
 
     const fetches = CONFIG.PAGES.map(name =>
-      fetch(`pages/${name}.html`).then(r => r.text()).catch(() => `<div class="page-content"><p>Error loading ${name}</p></div>`)
+      fetch(`pages/${name}.html`).then(r => r.text())
+        .catch(() => `<div class="page-content"><p>Error loading ${name}</p></div>`)
     );
-
     const htmls = await Promise.all(fetches);
     htmls.forEach((html, i) => {
       const slide = document.createElement('div');
@@ -32,6 +78,7 @@ window.App = (() => {
   // ── Nav Dots ──────────────────────────────────────────────
   function renderDots() {
     const container = document.getElementById('nav-dots');
+    if (!container) return;
     container.innerHTML = '';
     CONFIG.PAGES.forEach((_, i) => {
       const dot = document.createElement('div');
@@ -44,7 +91,7 @@ window.App = (() => {
     });
   }
 
-  // ── Navigate to Page ──────────────────────────────────────
+  // ── Navigate ──────────────────────────────────────────────
   function goTo(idx, animate = true) {
     if (idx < 0 || idx >= _pageCount) return;
     _currentPage = idx;
@@ -55,21 +102,18 @@ window.App = (() => {
       : 'none';
     track.style.transform = `translateX(-${idx * 100}vw)`;
 
-    // Update dots & title
     renderDots();
     const titleEl = document.getElementById('page-title');
     if (titleEl) {
       titleEl.textContent = CONFIG.PAGES[idx].charAt(0).toUpperCase() + CONFIG.PAGES[idx].slice(1);
     }
 
-    // Lazy-render page content on first visit
     const pageName = CONFIG.PAGES[idx];
     if (!_renderedPages.has(pageName)) {
       _renderedPages.add(pageName);
       renderPage(pageName);
     }
 
-    // Reset auto-advance timer
     if (CONFIG.AUTO_ADVANCE_PAGES && _autoTimer) {
       clearInterval(_autoTimer);
       startAutoAdvance();
@@ -79,7 +123,7 @@ window.App = (() => {
   function next() { goTo((_currentPage + 1) % _pageCount); }
   function prev() { goTo((_currentPage - 1 + _pageCount) % _pageCount); }
 
-  // ── Render page data ───────────────────────────────────────
+  // ── Render page data ──────────────────────────────────────
   function renderPage(name) {
     switch (name) {
       case 'calendar': Calendar.render(); break;
@@ -87,11 +131,12 @@ window.App = (() => {
         Calendar.renderTodayPanel();
         Weather.renderTodayPanel();
         break;
-      case 'chores':   Chores.render();   break;
+      case 'chores': Chores.render(); break;
+      case 'weather': Weather.render(); break;
     }
   }
 
-  // ── Clock ──────────────────────────────────────────────────
+  // ── Clock ─────────────────────────────────────────────────
   function updateClock() {
     const now = new Date();
     let h = now.getHours(), m = now.getMinutes();
@@ -111,19 +156,19 @@ window.App = (() => {
     const dateEl = document.getElementById('date-display');
     if (dateEl) {
       const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-      const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const months = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
       dateEl.textContent = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
     }
   }
 
-  // ── Swipe Detection ────────────────────────────────────────
+  // ── Swipe ─────────────────────────────────────────────────
   let _touchStartX = 0, _touchStartY = 0;
-  let _mouseStartX = 0, _isDragging = false;
+  let _mouseStartX = 0, _isDragging  = false;
 
   function initSwipe() {
     const vp = document.getElementById('page-viewport');
 
-    // Touch events
     vp.addEventListener('touchstart', e => {
       _touchStartX = e.touches[0].clientX;
       _touchStartY = e.touches[0].clientY;
@@ -137,23 +182,17 @@ window.App = (() => {
       }
     }, { passive: true });
 
-    // Mouse drag (for desktop testing)
-    vp.addEventListener('mousedown', e => {
-      _mouseStartX = e.clientX;
-      _isDragging  = true;
-    });
-
-    vp.addEventListener('mouseup', e => {
+    vp.addEventListener('mousedown', e => { _mouseStartX = e.clientX; _isDragging = true; });
+    vp.addEventListener('mouseup',   e => {
       if (!_isDragging) return;
       _isDragging = false;
       const dx = e.clientX - _mouseStartX;
       if (Math.abs(dx) > 50) dx < 0 ? next() : prev();
     });
-
     vp.addEventListener('mouseleave', () => { _isDragging = false; });
   }
 
-  // ── Keyboard Navigation ────────────────────────────────────
+  // ── Keyboard ──────────────────────────────────────────────
   function initKeyboard() {
     document.addEventListener('keydown', e => {
       if (e.key === 'ArrowRight') next();
@@ -161,13 +200,13 @@ window.App = (() => {
     });
   }
 
-  // ── Auto-Advance ───────────────────────────────────────────
+  // ── Auto-Advance ──────────────────────────────────────────
   function startAutoAdvance() {
     if (!CONFIG.AUTO_ADVANCE_PAGES) return;
     _autoTimer = setInterval(() => next(), CONFIG.AUTO_ADVANCE_INTERVAL_MS);
   }
 
-  // ── Fullscreen on first interaction ───────────────────────
+  // ── Fullscreen ────────────────────────────────────────────
   function requestFullscreenOnce() {
     const handler = () => {
       if (document.documentElement.requestFullscreen) {
@@ -180,13 +219,12 @@ window.App = (() => {
     document.addEventListener('touchstart', handler, { once: true, passive: true });
   }
 
-  // ── Theme ──────────────────────────────────────────────────
+  // ── Theme ─────────────────────────────────────────────────
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('dashboard_theme', theme);
     const btn = document.getElementById('theme-toggle');
     if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-    // Update PWA theme-color meta tag
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = theme === 'dark' ? '#0D1117' : '#EEF2F7';
   }
@@ -201,41 +239,47 @@ window.App = (() => {
     applyTheme(saved);
   }
 
-  // ── Init ───────────────────────────────────────────────────
+  // ── Setup screen: add-account button ─────────────────────
+  function initSetupScreen() {
+    const addBtn = document.getElementById('setup-add-account');
+    if (addBtn) {
+      addBtn.addEventListener('click', async () => {
+        addBtn.disabled = true;
+        addBtn.textContent = 'Opening sign-in…';
+        await Auth.signIn();
+        addBtn.disabled = false;
+        addBtn.textContent = '+ Add Account';
+      });
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────
   async function init() {
+    applySavedSettings();
+    migrateConfigData();
     initTheme();
+
     await loadPages();
-
-    // Start at first page (no animation)
     goTo(0, false);
-
-    // Render first page immediately
     renderPage(CONFIG.PAGES[0]);
 
-    // Clock
     updateClock();
     setInterval(updateClock, 1000);
 
-    // Auth pills
     Auth.renderAuthPills();
     Auth.checkReauthNeeded();
 
-    // Navigation
+    Admin.init();
+
     initSwipe();
     initKeyboard();
-
-    // Auto-advance
     startAutoAdvance();
-
-    // Fullscreen
     requestFullscreenOnce();
 
-    // Start background refresh loops
     Calendar.startAutoRefresh();
     Weather.startAutoRefresh();
     Chores.startMidnightReset();
 
-    // Re-render the active page when it comes back into focus (e.g. token refreshed)
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) renderPage(CONFIG.PAGES[_currentPage]);
     });
@@ -244,10 +288,20 @@ window.App = (() => {
   return { init, goTo, next, prev, toggleTheme };
 })();
 
-// If auth is already done (tokens present), boot directly.
-// Otherwise auth.js handles the setup splash and calls App.init() when ready.
 document.addEventListener('DOMContentLoaded', () => {
-  // auth.js has already run its init; if the app shell is visible, boot.
+  // Setup screen add-account button is always available
+  const addBtn = document.getElementById('setup-add-account');
+  if (addBtn) {
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true;
+      addBtn.textContent = 'Opening sign-in…';
+      await Auth.signIn();
+      addBtn.disabled = false;
+      addBtn.textContent = '+ Add Account';
+    });
+  }
+
+  // auth.js already ran init; if the app shell is visible, boot.
   if (document.getElementById('app').style.display !== 'none') {
     App.init();
   }

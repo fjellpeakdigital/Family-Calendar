@@ -1,88 +1,108 @@
 /* ============================================================
    chores.js — Chore chart with localStorage persistence
+   ============================================================
+   Kids and chore definitions are managed via the admin panel
+   and stored in fd_people / fd_chore_data.
+   Daily completion state lives in fd_chore_YYYY-MM-DD.
    ============================================================ */
 
 window.Chores = (() => {
   const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-  // ── Storage ────────────────────────────────────────────────
+  // ── Data Helpers ──────────────────────────────────────────
+  function getKids() {
+    try {
+      return JSON.parse(localStorage.getItem('fd_people') || '[]')
+             .filter(p => p.type === 'kid');
+    } catch { return []; }
+  }
+
+  function getKidChores(kidId) {
+    try {
+      return (JSON.parse(localStorage.getItem('fd_chore_data') || '{}'))[kidId] || [];
+    } catch { return []; }
+  }
+
+  // ── State Storage ─────────────────────────────────────────
   function todayKey() {
     const d = new Date();
-    return `chores_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return `fd_chore_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
   function loadState() {
-    try {
-      return JSON.parse(localStorage.getItem(todayKey())) || {};
-    } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(todayKey())) || {}; }
+    catch { return {}; }
   }
 
   function saveState(state) {
     localStorage.setItem(todayKey(), JSON.stringify(state));
+    // Prune keys older than 8 days
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 8);
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('fd_chore_')) continue;
+      const dateStr = key.replace('fd_chore_', '');
+      if (dateStr < cutoff.toISOString().slice(0, 10)) {
+        localStorage.removeItem(key);
+      }
+    }
   }
 
-  function choreKey(kidIdx, task) {
-    return `${kidIdx}_${task}`;
-  }
+  function choreKey(kidId, choreId) { return `${kidId}__${choreId}`; }
 
-  // ── Get today's chores for a kid ──────────────────────────
-  function todayChores(kid) {
+  // ── Today's chores for a kid ──────────────────────────────
+  function todayChores(kidId) {
     const dayName = DAY_SHORT[new Date().getDay()];
-    return kid.chores.filter(c => c.days.includes(dayName));
+    return getKidChores(kidId).filter(c => c.days.includes(dayName));
   }
 
   // ── Confetti ───────────────────────────────────────────────
   function spawnConfetti(container) {
     const colors = ['#58A6FF','#FF7EB3','#3FB950','#D29922','#F85149','#ffffff'];
-    const confettiWrap = document.createElement('div');
-    confettiWrap.className = 'confetti-container';
-    container.appendChild(confettiWrap);
+    const wrap   = document.createElement('div');
+    wrap.className = 'confetti-container';
+    container.appendChild(wrap);
 
     for (let i = 0; i < 20; i++) {
       const p = document.createElement('span');
       p.className = 'confetti-particle';
       p.style.cssText = `
-        left: ${Math.random() * 100}%;
-        top: -10px;
-        background: ${colors[Math.floor(Math.random() * colors.length)]};
-        width: ${6 + Math.random() * 8}px;
-        height: ${6 + Math.random() * 8}px;
-        animation-duration: ${1.2 + Math.random() * 1.4}s;
-        animation-delay: ${Math.random() * 0.5}s;
-        transform: rotate(${Math.random() * 360}deg);
-        border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+        left:${Math.random()*100}%;top:-10px;
+        background:${colors[Math.floor(Math.random()*colors.length)]};
+        width:${6+Math.random()*8}px;height:${6+Math.random()*8}px;
+        animation-duration:${1.2+Math.random()*1.4}s;
+        animation-delay:${Math.random()*0.5}s;
+        transform:rotate(${Math.random()*360}deg);
+        border-radius:${Math.random()>0.5?'50%':'2px'};
       `;
-      confettiWrap.appendChild(p);
+      wrap.appendChild(p);
     }
-
-    // Remove after animation
-    setTimeout(() => confettiWrap.remove(), 3000);
+    setTimeout(() => wrap.remove(), 3000);
   }
 
-  // ── Render one kid column ──────────────────────────────────
-  function renderKidColumn(kid, kidIdx, state) {
-    const chores = todayChores(kid);
-    const doneCount = chores.filter(c => state[choreKey(kidIdx, c.task)]).length;
-    const allDone = chores.length > 0 && doneCount === chores.length;
-    const pct = chores.length ? Math.round(doneCount / chores.length * 100) : 0;
+  // ── Render one kid column ─────────────────────────────────
+  function renderKidColumn(kid, state) {
+    const chores    = todayChores(kid.id);
+    const doneCount = chores.filter(c => state[choreKey(kid.id, c.id)]).length;
+    const allDone   = chores.length > 0 && doneCount === chores.length;
+    const pct       = chores.length ? Math.round(doneCount / chores.length * 100) : 0;
 
     const col = document.createElement('div');
     col.className = `kid-column${allDone ? ' kid-all-done' : ''}`;
-    col.id = `kid-col-${kidIdx}`;
+    col.id = `kid-col-${kid.id}`;
 
-    // Header
     const header = document.createElement('div');
     header.className = 'kid-header';
     header.innerHTML = `
-      <div class="kid-name">${escapeHtml(kid.name)}</div>
+      <div class="kid-name" style="color:${escapeHtml(kid.color || 'var(--text-primary)')}">${escapeHtml(kid.name)}</div>
       <div class="kid-progress-text">${doneCount} / ${chores.length} done</div>
       <div class="progress-bar-wrap">
-        <div class="progress-bar-fill" style="width:${pct}%"></div>
+        <div class="progress-bar-fill" style="width:${pct}%;background:${escapeHtml(kid.color || 'var(--accent-blue)')}"></div>
       </div>
     `;
     col.appendChild(header);
 
-    // Chore list
     const list = document.createElement('div');
     list.className = 'chore-list';
 
@@ -90,29 +110,24 @@ window.Chores = (() => {
       const empty = document.createElement('div');
       empty.className = 'no-events';
       empty.style.padding = '20px';
-      empty.textContent = 'No chores today! 🎉';
+      empty.textContent = 'No chores today!';
       list.appendChild(empty);
     } else {
       chores.forEach(chore => {
-        const done = !!state[choreKey(kidIdx, chore.task)];
+        const done = !!state[choreKey(kid.id, chore.id)];
         const item = document.createElement('div');
         item.className = `chore-item${done ? ' done' : ''}`;
-        item.dataset.kidIdx = kidIdx;
-        item.dataset.task   = chore.task;
 
         item.innerHTML = `
           <div class="chore-checkbox">${done ? '✓' : ''}</div>
           <div class="chore-task">${escapeHtml(chore.task)}</div>
         `;
-
-        item.addEventListener('click', () => toggleChore(kidIdx, chore.task));
+        item.addEventListener('click', () => toggleChore(kid.id, chore.id));
         list.appendChild(item);
       });
     }
-
     col.appendChild(list);
 
-    // Celebration overlay (if all done)
     if (allDone && chores.length > 0) {
       const overlay = document.createElement('div');
       overlay.className = 'celebration-overlay';
@@ -128,33 +143,42 @@ window.Chores = (() => {
     return col;
   }
 
-  // ── Toggle a chore ─────────────────────────────────────────
-  function toggleChore(kidIdx, task) {
+  // ── Toggle ────────────────────────────────────────────────
+  function toggleChore(kidId, choreId) {
     const state = loadState();
-    const key   = choreKey(kidIdx, task);
+    const key   = choreKey(kidId, choreId);
     state[key]  = !state[key];
     saveState(state);
-    renderChores(); // full re-render to update progress
+    renderChores();
   }
 
-  // ── Full render ────────────────────────────────────────────
+  // ── Full Render ───────────────────────────────────────────
   function renderChores() {
     const page = document.getElementById('chores-page');
     if (!page) return;
     page.innerHTML = '';
 
+    const kids  = getKids();
     const state = loadState();
 
-    CONFIG.KIDS.forEach((kid, idx) => {
-      page.appendChild(renderKidColumn(kid, idx, state));
-    });
+    if (kids.length === 0) {
+      page.innerHTML = `
+        <div class="no-events" style="margin:auto;text-align:center">
+          <p>No kids set up yet.</p>
+          <p style="font-size:14px;color:var(--text-secondary)">Add kids in the ⚙ admin panel.</p>
+        </div>
+      `;
+      return;
+    }
+
+    kids.forEach(kid => page.appendChild(renderKidColumn(kid, state)));
   }
 
   function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // ── Midnight reset check ───────────────────────────────────
+  // ── Midnight Reset ────────────────────────────────────────
   let _lastDate = new Date().toDateString();
 
   function startMidnightReset() {
@@ -162,15 +186,12 @@ window.Chores = (() => {
       const today = new Date().toDateString();
       if (today !== _lastDate) {
         _lastDate = today;
-        renderChores(); // New day — chores auto-reset via new todayKey
+        renderChores();
       }
     }, 60_000);
   }
 
-  // ── Public API ─────────────────────────────────────────────
-  function render() {
-    renderChores();
-  }
+  function render() { renderChores(); }
 
   return { render, startMidnightReset };
 })();

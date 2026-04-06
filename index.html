@@ -24,15 +24,19 @@
   <!-- ── Setup Splash ───────────────────────────────────────── -->
   <div id="setup-splash" aria-label="Setup screen">
     <h1>Family Dashboard</h1>
-    <p class="subtitle">Let's connect everyone's Google Calendar so the dashboard knows what's going on.</p>
+    <p class="subtitle">Connect a Google account to get started. You can add more accounts and manage everything via the ⚙ admin panel.</p>
 
     <div id="setup-users">
       <!-- Populated by auth.js -->
     </div>
 
-    <button id="setup-continue" class="btn btn-success" style="display:none;" onclick="window.Auth.finishSetup()">
-      ✓ &nbsp; Let's Go!
-    </button>
+    <div class="setup-actions">
+      <button id="setup-add-account" class="btn btn-outline">+ Add Account</button>
+      <button id="setup-continue" class="btn btn-success" style="display:none;"
+              onclick="window.Auth.finishSetup()">
+        ✓ &nbsp; Let's Go!
+      </button>
+    </div>
   </div>
 
   <!-- ── Event Detail Modal ────────────────────────────────────── -->
@@ -46,6 +50,54 @@
   <div id="reauth-banner" role="alert">
     <span>⚠️</span>
     <span id="reauth-message">Calendar session expired — tap to sign in again</span>
+  </div>
+
+  <!-- ── Admin Overlay ──────────────────────────────────────── -->
+  <div id="admin-overlay" role="dialog" aria-modal="true" aria-label="Admin settings">
+
+    <!-- PIN Screen -->
+    <div id="pin-screen" style="display:flex">
+      <div class="pin-container">
+        <h2 class="pin-title">Enter PIN</h2>
+        <div class="pin-display">
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+          <span class="pin-dot"></span>
+        </div>
+        <div id="pin-error"></div>
+        <div id="pin-keypad">
+          <button class="pin-key" onclick="Admin.pinKey('1')">1</button>
+          <button class="pin-key" onclick="Admin.pinKey('2')">2</button>
+          <button class="pin-key" onclick="Admin.pinKey('3')">3</button>
+          <button class="pin-key" onclick="Admin.pinKey('4')">4</button>
+          <button class="pin-key" onclick="Admin.pinKey('5')">5</button>
+          <button class="pin-key" onclick="Admin.pinKey('6')">6</button>
+          <button class="pin-key" onclick="Admin.pinKey('7')">7</button>
+          <button class="pin-key" onclick="Admin.pinKey('8')">8</button>
+          <button class="pin-key" onclick="Admin.pinKey('9')">9</button>
+          <button class="pin-key pin-key-cancel" onclick="Admin.closeAdmin()">✕</button>
+          <button class="pin-key" onclick="Admin.pinKey('0')">0</button>
+          <button class="pin-key pin-key-back" onclick="Admin.pinKey('back')">⌫</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin-panel" style="display:none">
+      <div class="admin-header">
+        <h2>Settings</h2>
+        <button id="admin-close" class="admin-close-btn" aria-label="Close">✕</button>
+      </div>
+      <div class="admin-tabs">
+        <button class="admin-tab-btn active" data-tab="people">People</button>
+        <button class="admin-tab-btn" data-tab="calendars">Calendars</button>
+        <button class="admin-tab-btn" data-tab="chores">Chores</button>
+        <button class="admin-tab-btn" data-tab="settings">Settings</button>
+      </div>
+      <div id="admin-content" class="admin-content"></div>
+    </div>
+
   </div>
 
   <!-- ── Main App ───────────────────────────────────────────── -->
@@ -80,6 +132,11 @@
       </div>
     </div>
 
+    <!-- Footer -->
+    <footer id="footer">
+      <button id="admin-btn" aria-label="Open admin settings" title="Settings">⚙</button>
+    </footer>
+
   </div>
 
   <!-- Apply saved theme immediately to avoid flash of wrong theme -->
@@ -99,6 +156,7 @@
   <script src="js/calendar.js"></script>
   <script src="js/weather.js"></script>
   <script src="js/chores.js"></script>
+  <script src="js/admin.js"></script>
   <script src="js/app.js"></script>
 
 </body>
