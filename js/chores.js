@@ -9,6 +9,22 @@
 window.Chores = (() => {
   const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
+  // Period definitions: hour ranges (24h) and display info
+  const PERIODS = [
+    { key: 'morning',   label: 'Morning',   emoji: '🌅', start:  5, end: 12 },
+    { key: 'afternoon', label: 'Afternoon', emoji: '☀️', start: 12, end: 17 },
+    { key: 'evening',   label: 'Evening',   emoji: '🌙', start: 17, end: 23 },
+    { key: 'anytime',   label: null,        emoji: '',   start:  0, end: 24 },
+  ];
+
+  function currentPeriodKey() {
+    const h = new Date().getHours();
+    for (const p of PERIODS) {
+      if (p.key !== 'anytime' && h >= p.start && h < p.end) return p.key;
+    }
+    return null; // outside any named period (e.g. late night)
+  }
+
   // ── Data Helpers ──────────────────────────────────────────
   function getKids() {
     try {
@@ -51,10 +67,17 @@ window.Chores = (() => {
 
   function choreKey(kidId, choreId) { return `${kidId}__${choreId}`; }
 
-  // ── Today's chores for a kid ──────────────────────────────
+  // ── Today's chores for a kid, sorted by period order ─────
+  const PERIOD_ORDER = ['morning', 'afternoon', 'evening', 'anytime'];
   function todayChores(kidId) {
     const dayName = DAY_SHORT[new Date().getDay()];
-    return getKidChores(kidId).filter(c => c.days.includes(dayName));
+    return getKidChores(kidId)
+      .filter(c => c.days.includes(dayName))
+      .sort((a, b) => {
+        const ai = PERIOD_ORDER.indexOf(a.period || 'anytime');
+        const bi = PERIOD_ORDER.indexOf(b.period || 'anytime');
+        return ai - bi;
+      });
   }
 
   // ── Confetti ───────────────────────────────────────────────
@@ -113,10 +136,27 @@ window.Chores = (() => {
       empty.textContent = 'No chores today!';
       list.appendChild(empty);
     } else {
+      const activePeriod = currentPeriodKey();
+      let lastPeriod = null;
+
       chores.forEach(chore => {
+        const period = chore.period || 'anytime';
+        const periodMeta = PERIODS.find(p => p.key === period);
+
+        // Insert a section divider when the period changes (skip for 'anytime')
+        if (period !== 'anytime' && period !== lastPeriod) {
+          lastPeriod = period;
+          const divider = document.createElement('div');
+          const isActive = period === activePeriod;
+          divider.className = `chore-period-divider${isActive ? ' active-period' : ''}`;
+          divider.innerHTML = `<span>${periodMeta.emoji} ${periodMeta.label}</span>`;
+          list.appendChild(divider);
+        }
+
         const done = !!state[choreKey(kid.id, chore.id)];
+        const isActive = period === activePeriod || period === 'anytime';
         const item = document.createElement('div');
-        item.className = `chore-item${done ? ' done' : ''}`;
+        item.className = `chore-item${done ? ' done' : ''}${isActive ? ' period-active' : ' period-dim'}`;
 
         item.innerHTML = `
           <div class="chore-checkbox">${done ? '✓' : ''}</div>

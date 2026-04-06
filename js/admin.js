@@ -487,6 +487,13 @@ window.Admin = (() => {
               <button class="day-btn selected" data-day="${d}">${d}</button>
             `).join('')}
           </div>
+          <div class="period-toggles" id="period-toggles-${escapeHtml(kid.id)}">
+            <span class="period-label-hint">Time of day:</span>
+            <button class="period-btn selected" data-period="anytime">Any time</button>
+            <button class="period-btn" data-period="morning">Morning</button>
+            <button class="period-btn" data-period="afternoon">Afternoon</button>
+            <button class="period-btn" data-period="evening">Evening</button>
+          </div>
           <button class="btn btn-sm btn-primary add-chore-btn" data-kid="${escapeHtml(kid.id)}">Add</button>
         </div>
       `;
@@ -499,6 +506,14 @@ window.Admin = (() => {
         btn.addEventListener('click', () => btn.classList.toggle('selected'));
       });
 
+      // Period toggle buttons (single-select)
+      section.querySelectorAll('.period-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          section.querySelectorAll('.period-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+        });
+      });
+
       // Add chore button
       section.querySelector('.add-chore-btn').addEventListener('click', () => {
         const taskInput = document.getElementById(`new-task-${kid.id}`);
@@ -506,12 +521,15 @@ window.Admin = (() => {
         if (!task) return;
         const selectedDays = [...section.querySelectorAll('.day-btn.selected')].map(b => b.dataset.day);
         if (selectedDays.length === 0) return;
+        const period = section.querySelector('.period-btn.selected')?.dataset.period || 'anytime';
 
         const cd = getChoreData();
         if (!cd[kid.id]) cd[kid.id] = [];
-        cd[kid.id].push({ id: crypto.randomUUID(), task, days: selectedDays });
+        cd[kid.id].push({ id: crypto.randomUUID(), task, days: selectedDays, period });
         saveChoreData(cd);
         taskInput.value = '';
+        // Reset period to anytime
+        section.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('selected', b.dataset.period === 'anytime'));
         renderChoreList(document.getElementById(`chores-${kid.id}`), kid, cd[kid.id]);
       });
     });
@@ -526,8 +544,10 @@ window.Admin = (() => {
     chores.forEach(chore => {
       const row = document.createElement('div');
       row.className = 'chore-admin-row';
+      const periodLabel = { morning: '🌅 Morning', afternoon: '☀️ Afternoon', evening: '🌙 Evening' }[chore.period] || '';
       row.innerHTML = `
         <span class="chore-task-name">${escapeHtml(chore.task)}</span>
+        ${periodLabel ? `<span class="chore-period-tag">${periodLabel}</span>` : ''}
         <span class="chore-days">${escapeHtml(chore.days.join(', '))}</span>
         <button class="btn btn-sm btn-danger" data-remove-chore="${escapeHtml(chore.id)}">✕</button>
       `;
