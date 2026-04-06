@@ -916,6 +916,12 @@ html, body {
   z-index: 5;
 }
 
+/* Owner name prefix inside event blocks — inherits the event border color */
+.ev-owner-prefix {
+  font-weight: 700;
+  opacity: 0.85;
+}
+
 .cal-tgrid-event-title {
   font-size: 12px;
   font-weight: 600;

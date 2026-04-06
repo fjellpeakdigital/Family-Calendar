@@ -265,7 +265,7 @@ window.Calendar = (() => {
         hasAllDay = true;
         const chip = document.createElement('div');
         chip.className = 'cal-tgrid-allday-chip';
-        chip.textContent = ev.title;
+        chip.textContent = ev.owner ? `${ev.owner} – ${ev.title}` : ev.title;
         chip.style.background = colorWithAlpha(ev.color, 0.22);
         chip.style.borderLeft = `3px solid ${ev.color}`;
         makeChipClickable(chip, ev.id);
@@ -360,7 +360,7 @@ window.Calendar = (() => {
 
         const showTime = heightPx >= 36;
         block.innerHTML = `
-          <div class="cal-tgrid-event-title">${escapeHtml(ev.title)}</div>
+          <div class="cal-tgrid-event-title">${ev.owner ? `<span class="ev-owner-prefix">${escapeHtml(ev.owner)}</span> – ` : ''}${escapeHtml(ev.title)}</div>
           ${showTime ? `<div class="cal-tgrid-event-time">${formatTime(ev.start, false)}${ev.end ? ` – ${formatTime(ev.end, false)}` : ''}</div>` : ''}
         `;
         makeChipClickable(block, ev.id);
@@ -425,7 +425,9 @@ window.Calendar = (() => {
         chip.className = 'cal-month-event';
         chip.style.background  = colorWithAlpha(ev.color, 0.25);
         chip.style.borderLeft  = `3px solid ${ev.color}`;
-        chip.textContent = ev.allDay ? ev.title : `${formatTime(ev.start, false)} ${ev.title}`;
+        chip.textContent = ev.allDay
+          ? (ev.owner ? `${ev.owner} – ${ev.title}` : ev.title)
+          : `${formatTime(ev.start, false)} ${ev.owner ? `${ev.owner} – ` : ''}${ev.title}`;
         makeChipClickable(chip, ev.id);
         cell.appendChild(chip);
       });
@@ -579,10 +581,8 @@ window.Calendar = (() => {
       item.style.borderRadius   = '10px';
       item.innerHTML = `
         <div class="event-body">
-          <div class="event-title">${escapeHtml(ev.title)}</div>
-          <div class="event-time">${formatTime(ev.start, ev.allDay)}
-            ${ev.owner ? `<span class="event-who"> · ${escapeHtml(ev.owner)}</span>` : ''}
-          </div>
+          <div class="event-title">${ev.owner ? `<span class="ev-owner-prefix">${escapeHtml(ev.owner)}</span> – ` : ''}${escapeHtml(ev.title)}</div>
+          <div class="event-time">${formatTime(ev.start, ev.allDay)}</div>
         </div>
         <span class="event-detail-arrow">›</span>
       `;
