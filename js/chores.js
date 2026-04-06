@@ -4,6 +4,8 @@
    Kids and chore definitions are managed via the admin panel
    and stored in fd_people / fd_chore_data.
    Daily completion state lives in fd_chore_YYYY-MM-DD.
+   Points accumulate in fd_points (per kid).
+   Rewards defined per kid in fd_rewards.
    ============================================================ */
 
 window.Chores = (() => {
@@ -37,6 +39,30 @@ window.Chores = (() => {
     try {
       return (JSON.parse(localStorage.getItem('fd_chore_data') || '{}'))[kidId] || [];
     } catch { return []; }
+  }
+
+  // ── Points Storage ────────────────────────────────────────
+  function getPoints() {
+    try { return JSON.parse(localStorage.getItem('fd_points')) || {}; }
+    catch { return {}; }
+  }
+
+  function savePoints(pts) {
+    localStorage.setItem('fd_points', JSON.stringify(pts));
+  }
+
+  function getKidPoints(kidId) {
+    return getPoints()[kidId] || 0;
+  }
+
+  // ── Rewards Storage ───────────────────────────────────────
+  function getRewards() {
+    try { return JSON.parse(localStorage.getItem('fd_rewards')) || {}; }
+    catch { return {}; }
+  }
+
+  function saveRewards(obj) {
+    localStorage.setItem('fd_rewards', JSON.stringify(obj));
   }
 
   // ── State Storage ─────────────────────────────────────────
@@ -104,12 +130,80 @@ window.Chores = (() => {
     setTimeout(() => wrap.remove(), 3000);
   }
 
+  // ── Render rewards panel ──────────────────────────────────
+  function renderRewardsPanel(kid, currentPoints) {
+    const allRewards = getRewards();
+    const rewards = allRewards[kid.id] || [];
+    if (rewards.length === 0) return null;
+
+    const panel = document.createElement('div');
+    panel.className = 'rewards-panel';
+
+    const title = document.createElement('div');
+    title.className = 'rewards-panel-title';
+    title.textContent = '🏆 Rewards';
+    panel.appendChild(title);
+
+    rewards.forEach(reward => {
+      const canClaim = currentPoints >= reward.points;
+      const row = document.createElement('div');
+      row.className = `reward-row${canClaim ? ' can-claim' : ''}`;
+
+      row.innerHTML = `
+        <span class="reward-emoji">${escapeHtml(reward.emoji || '🎁')}</span>
+        <div class="reward-info">
+          <span class="reward-name">${escapeHtml(reward.name)}</span>
+          <span class="reward-cost">⭐ ${reward.points} pts</span>
+        </div>
+        <button class="reward-claim-btn${canClaim ? ' active' : ''}"
+                ${canClaim ? '' : 'disabled'}>
+          ${canClaim ? 'Claim!' : `${reward.points - currentPoints} more`}
+        </button>
+      `;
+
+      if (canClaim) {
+        row.querySelector('.reward-claim-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          claimReward(kid, reward);
+        });
+      }
+
+      panel.appendChild(row);
+    });
+
+    return panel;
+  }
+
+  // ── Claim a reward ────────────────────────────────────────
+  function claimReward(kid, reward) {
+    const pts = getPoints();
+    const current = pts[kid.id] || 0;
+    if (current < reward.points) return;
+
+    pts[kid.id] = current - reward.points;
+    savePoints(pts);
+
+    // Show a brief celebration message
+    const col = document.getElementById(`kid-col-${kid.id}`);
+    if (col) {
+      spawnConfetti(col);
+      const flash = document.createElement('div');
+      flash.className = 'reward-claimed-flash';
+      flash.textContent = `${reward.emoji || '🎁'} ${reward.name} claimed!`;
+      col.appendChild(flash);
+      setTimeout(() => flash.remove(), 2500);
+    }
+
+    renderChores();
+  }
+
   // ── Render one kid column ─────────────────────────────────
   function renderKidColumn(kid, state) {
     const chores    = todayChores(kid.id);
     const doneCount = chores.filter(c => state[choreKey(kid.id, c.id)]).length;
     const allDone   = chores.length > 0 && doneCount === chores.length;
     const pct       = chores.length ? Math.round(doneCount / chores.length * 100) : 0;
+    const totalPts  = getKidPoints(kid.id);
 
     const col = document.createElement('div');
     col.className = `kid-column${allDone ? ' kid-all-done' : ''}`;
@@ -119,6 +213,7 @@ window.Chores = (() => {
     header.className = 'kid-header';
     header.innerHTML = `
       <div class="kid-name" style="color:${escapeHtml(kid.color || 'var(--text-primary)')}">${escapeHtml(kid.name)}</div>
+      <div class="kid-points-badge">⭐ ${totalPts} pts</div>
       <div class="kid-progress-text">${doneCount} / ${chores.length} done</div>
       <div class="progress-bar-wrap">
         <div class="progress-bar-fill" style="width:${pct}%;background:${escapeHtml(kid.color || 'var(--accent-blue)')}"></div>
@@ -155,18 +250,24 @@ window.Chores = (() => {
 
         const done = !!state[choreKey(kid.id, chore.id)];
         const isActive = period === activePeriod || period === 'anytime';
+        const pts = chore.points || 0;
         const item = document.createElement('div');
         item.className = `chore-item${done ? ' done' : ''}${isActive ? ' period-active' : ' period-dim'}`;
 
         item.innerHTML = `
           <div class="chore-checkbox">${done ? '✓' : ''}</div>
           <div class="chore-task">${escapeHtml(chore.task)}</div>
+          ${pts > 0 ? `<div class="chore-pts-badge${done ? ' earned' : ''}">⭐ ${pts}</div>` : ''}
         `;
         item.addEventListener('click', () => toggleChore(kid.id, chore.id));
         list.appendChild(item);
       });
     }
     col.appendChild(list);
+
+    // Rewards panel
+    const rewardsPanel = renderRewardsPanel(kid, totalPts);
+    if (rewardsPanel) col.appendChild(rewardsPanel);
 
     if (allDone && chores.length > 0) {
       const overlay = document.createElement('div');
@@ -185,10 +286,21 @@ window.Chores = (() => {
 
   // ── Toggle ────────────────────────────────────────────────
   function toggleChore(kidId, choreId) {
-    const state = loadState();
-    const key   = choreKey(kidId, choreId);
-    state[key]  = !state[key];
+    const state  = loadState();
+    const key    = choreKey(kidId, choreId);
+    const wasDone = !!state[key];
+    state[key]   = !wasDone;
     saveState(state);
+
+    // Update points
+    const chores = getKidChores(kidId);
+    const chore  = chores.find(c => c.id === choreId);
+    if (chore && (chore.points || 0) > 0) {
+      const pts = getPoints();
+      pts[kidId] = Math.max(0, (pts[kidId] || 0) + (wasDone ? -(chore.points) : chore.points));
+      savePoints(pts);
+    }
+
     renderChores();
   }
 

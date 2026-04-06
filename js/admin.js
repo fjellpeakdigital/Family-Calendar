@@ -37,6 +37,13 @@ window.Admin = (() => {
     localStorage.setItem('fd_chore_data', JSON.stringify(obj));
   }
 
+  function getRewards() {
+    try { return JSON.parse(localStorage.getItem('fd_rewards')) || {}; } catch { return {}; }
+  }
+  function saveRewards(obj) {
+    localStorage.setItem('fd_rewards', JSON.stringify(obj));
+  }
+
   function getAssignments() {
     try { return JSON.parse(localStorage.getItem('fd_cal_assignments')) || []; } catch { return []; }
   }
@@ -494,12 +501,30 @@ window.Admin = (() => {
             <button class="period-btn" data-period="afternoon">Afternoon</button>
             <button class="period-btn" data-period="evening">Evening</button>
           </div>
-          <button class="btn btn-sm btn-primary add-chore-btn" data-kid="${escapeHtml(kid.id)}">Add</button>
+          <div class="chore-points-row">
+            <span class="period-label-hint">Points:</span>
+            <div class="points-preset-btns">
+              <button class="points-preset selected" data-pts="1">1</button>
+              <button class="points-preset" data-pts="2">2</button>
+              <button class="points-preset" data-pts="5">5</button>
+              <button class="points-preset" data-pts="10">10</button>
+            </div>
+            <input type="number" class="admin-input points-custom-input"
+                   id="new-pts-${escapeHtml(kid.id)}" min="1" max="100" value="1" />
+          </div>
+          <button class="btn btn-sm btn-primary add-chore-btn" data-kid="${escapeHtml(kid.id)}">Add Chore</button>
         </div>
+
+        <div class="admin-section-header" style="margin-top:16px">
+          <h3>🏆 Rewards</h3>
+          <button class="btn btn-sm btn-outline add-reward-btn" data-kid="${escapeHtml(kid.id)}">+ Add Reward</button>
+        </div>
+        <div class="rewards-admin-list" id="rewards-${escapeHtml(kid.id)}"></div>
       `;
       el.appendChild(section);
 
       renderChoreList(document.getElementById(`chores-${kid.id}`), kid, chores);
+      renderRewardList(document.getElementById(`rewards-${kid.id}`), kid);
 
       // Day toggle buttons
       section.querySelectorAll('.day-btn').forEach(btn => {
@@ -514,6 +539,21 @@ window.Admin = (() => {
         });
       });
 
+      // Points preset buttons — sync with number input
+      const ptsInput = document.getElementById(`new-pts-${kid.id}`);
+      section.querySelectorAll('.points-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          section.querySelectorAll('.points-preset').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          ptsInput.value = btn.dataset.pts;
+        });
+      });
+      ptsInput.addEventListener('input', () => {
+        section.querySelectorAll('.points-preset').forEach(b =>
+          b.classList.toggle('selected', b.dataset.pts === ptsInput.value)
+        );
+      });
+
       // Add chore button
       section.querySelector('.add-chore-btn').addEventListener('click', () => {
         const taskInput = document.getElementById(`new-task-${kid.id}`);
@@ -522,15 +562,22 @@ window.Admin = (() => {
         const selectedDays = [...section.querySelectorAll('.day-btn.selected')].map(b => b.dataset.day);
         if (selectedDays.length === 0) return;
         const period = section.querySelector('.period-btn.selected')?.dataset.period || 'anytime';
+        const points = Math.max(1, parseInt(ptsInput.value, 10) || 1);
 
         const cd = getChoreData();
         if (!cd[kid.id]) cd[kid.id] = [];
-        cd[kid.id].push({ id: crypto.randomUUID(), task, days: selectedDays, period });
+        cd[kid.id].push({ id: crypto.randomUUID(), task, days: selectedDays, period, points });
         saveChoreData(cd);
         taskInput.value = '';
-        // Reset period to anytime
+        ptsInput.value = '1';
         section.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('selected', b.dataset.period === 'anytime'));
+        section.querySelectorAll('.points-preset').forEach(b => b.classList.toggle('selected', b.dataset.pts === '1'));
         renderChoreList(document.getElementById(`chores-${kid.id}`), kid, cd[kid.id]);
+      });
+
+      // Add reward button
+      section.querySelector('.add-reward-btn').addEventListener('click', () => {
+        showRewardForm(kid, document.getElementById(`rewards-${kid.id}`));
       });
     });
   }
@@ -545,9 +592,11 @@ window.Admin = (() => {
       const row = document.createElement('div');
       row.className = 'chore-admin-row';
       const periodLabel = { morning: '🌅 Morning', afternoon: '☀️ Afternoon', evening: '🌙 Evening' }[chore.period] || '';
+      const pts = chore.points || 1;
       row.innerHTML = `
         <span class="chore-task-name">${escapeHtml(chore.task)}</span>
         ${periodLabel ? `<span class="chore-period-tag">${periodLabel}</span>` : ''}
+        <span class="chore-pts-tag">⭐ ${pts}pt${pts !== 1 ? 's' : ''}</span>
         <span class="chore-days">${escapeHtml(chore.days.join(', '))}</span>
         <button class="btn btn-sm btn-danger" data-remove-chore="${escapeHtml(chore.id)}">✕</button>
       `;
@@ -555,10 +604,88 @@ window.Admin = (() => {
         const cd = getChoreData();
         cd[kid.id] = (cd[kid.id] || []).filter(c => c.id !== chore.id);
         saveChoreData(cd);
-        const cd2 = getChoreData();
-        renderChoreList(container, kid, cd2[kid.id] || []);
+        renderChoreList(container, kid, getChoreData()[kid.id] || []);
       });
       container.appendChild(row);
+    });
+  }
+
+  // ── Rewards admin ─────────────────────────────────────────
+  const REWARD_EMOJIS = ['🎮','🍕','🎬','🍦','📚','🎨','🎯','🏊','🛒','🎁','🌟','🦄'];
+
+  function renderRewardList(container, kid) {
+    const rewards = (getRewards()[kid.id] || []);
+    container.innerHTML = '';
+    if (rewards.length === 0) {
+      container.innerHTML = '<div class="admin-empty">No rewards yet.</div>';
+      return;
+    }
+    rewards.forEach(reward => {
+      const row = document.createElement('div');
+      row.className = 'chore-admin-row';
+      row.innerHTML = `
+        <span class="reward-emoji-display">${escapeHtml(reward.emoji || '🎁')}</span>
+        <span class="chore-task-name">${escapeHtml(reward.name)}</span>
+        <span class="chore-pts-tag">⭐ ${reward.points} pts</span>
+        <button class="btn btn-sm btn-danger" data-remove-reward="${escapeHtml(reward.id)}">✕</button>
+      `;
+      row.querySelector('[data-remove-reward]').addEventListener('click', () => {
+        const r = getRewards();
+        r[kid.id] = (r[kid.id] || []).filter(x => x.id !== reward.id);
+        saveRewards(r);
+        renderRewardList(container, kid);
+      });
+      container.appendChild(row);
+    });
+  }
+
+  function showRewardForm(kid, listContainer) {
+    // Remove any existing form
+    listContainer.parentElement.querySelector('.reward-add-form')?.remove();
+
+    const form = document.createElement('div');
+    form.className = 'add-chore-form reward-add-form';
+    form.innerHTML = `
+      <div class="emoji-grid reward-emoji-picker">
+        ${REWARD_EMOJIS.map((e, i) => `
+          <button class="emoji-btn${i === 0 ? ' selected' : ''}" data-emoji="${e}">${e}</button>
+        `).join('')}
+      </div>
+      <input type="hidden" id="rf-emoji" value="${REWARD_EMOJIS[0]}" />
+      <input type="text" class="admin-input" id="rf-name" placeholder="Reward name…" />
+      <div class="chore-points-row">
+        <span class="period-label-hint">Cost (pts):</span>
+        <input type="number" class="admin-input points-custom-input" id="rf-pts" min="1" value="25" />
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-outline btn-sm" id="rf-cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="rf-save">Add Reward</button>
+      </div>
+    `;
+    listContainer.parentElement.appendChild(form);
+
+    form.querySelectorAll('.emoji-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        form.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('rf-emoji').value = btn.dataset.emoji;
+      });
+    });
+
+    document.getElementById('rf-cancel').addEventListener('click', () => form.remove());
+
+    document.getElementById('rf-save').addEventListener('click', () => {
+      const name = document.getElementById('rf-name').value.trim();
+      if (!name) return;
+      const pts  = Math.max(1, parseInt(document.getElementById('rf-pts').value, 10) || 25);
+      const emoji = document.getElementById('rf-emoji').value;
+
+      const r = getRewards();
+      if (!r[kid.id]) r[kid.id] = [];
+      r[kid.id].push({ id: crypto.randomUUID(), name, emoji, points: pts });
+      saveRewards(r);
+      form.remove();
+      renderRewardList(listContainer, kid);
     });
   }
 
