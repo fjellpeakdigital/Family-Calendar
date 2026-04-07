@@ -1,0 +1,16 @@
+import type { Metadata } from 'next'
+import './globals.css'
+
+export const metadata: Metadata = {
+  title: 'FamilyDash',
+  description: "Your family's shared dashboard — calendar, chores, and more.",
+  robots: { index: false, follow: false },
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className="h-full">
+      <body className="h-full antialiased">{children}</body>
+    </html>
+  )
+}
