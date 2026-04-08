@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { encryptToken } from '@/lib/crypto'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -26,7 +26,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!account || account.provider !== 'google') return false
       if (!user.email) return false
 
-      const supabase = await createClient()
+      const supabase = createAdminClient()
 
       // Upsert user row (email only — no profile photo stored)
       const { data: existingUser } = await supabase
