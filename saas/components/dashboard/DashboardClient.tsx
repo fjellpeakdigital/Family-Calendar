@@ -36,7 +36,7 @@ const PAGE_LABELS: Record<Page, string> = {
 }
 
 export default function DashboardClient({ userEmail, userName, familyPlan }: Props) {
-  const { config } = useConfig()
+  const { config, setConfig } = useConfig()
   const [page, setPage]             = useState<Page>('calendar')
   const [now, setNow]               = useState(new Date())
   const [calView, setCalView]       = useState<CalView>('week')
@@ -165,7 +165,15 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
             />
           )}
           {page === 'chores' && (
-            <ChoresView config={config} completions={chores} onToggle={toggleChore} now={now} />
+            <ChoresView
+              config={config}
+              completions={chores}
+              onToggle={toggleChore}
+              onPointsChange={(kidId, newPoints) =>
+                setConfig({ ...config, points: { ...config.points, [kidId]: newPoints } })
+              }
+              now={now}
+            />
           )}
         </main>
 

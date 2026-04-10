@@ -2,6 +2,7 @@ import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
 import { createAdminClient } from '@/lib/supabase/server'
 import { encryptToken } from '@/lib/crypto'
+import { sendWelcomeEmail } from '@/lib/email'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -57,6 +58,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name ?? null,
           role: 'owner',
         })
+
+        // Fire-and-forget welcome email (non-blocking)
+        sendWelcomeEmail(user.email, user.name ?? null).catch(() => {})
       }
 
       // Encrypt and upsert OAuth tokens

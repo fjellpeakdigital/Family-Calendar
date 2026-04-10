@@ -529,6 +529,64 @@ function RewardsSection({ kid, rewards, onAdd, onRemove }: {
   )
 }
 
+// ── Invite Section ────────────────────────────────────────────
+
+function InviteSection() {
+  const [email,   setEmail]   = useState('')
+  const [status,  setStatus]  = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [errMsg,  setErrMsg]  = useState('')
+
+  async function sendInvite() {
+    if (!email.trim() || !email.includes('@')) return
+    setStatus('sending')
+    setErrMsg('')
+    try {
+      const res = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErrMsg(data.error ?? 'Failed to send invite'); setStatus('error'); return }
+      setStatus('sent')
+      setEmail('')
+      setTimeout(() => setStatus('idle'), 4000)
+    } catch {
+      setErrMsg('Network error — please try again.')
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Invite family member</p>
+      <p className="text-xs text-gray-500">
+        Send an email invite so another parent or family member can join this dashboard.
+      </p>
+      <div className="flex gap-2">
+        <input
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && sendInvite()}
+          placeholder="their@email.com"
+          type="email"
+          disabled={status === 'sending' || status === 'sent'}
+          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-blue-500/50 disabled:opacity-50"
+        />
+        <button
+          onClick={sendInvite}
+          disabled={status === 'sending' || status === 'sent' || !email.trim()}
+          className="rounded-lg bg-blue-500/20 px-3 py-2 text-xs font-semibold text-blue-400 hover:bg-blue-500/30 disabled:opacity-40 transition"
+        >
+          {status === 'sending' ? 'Sending…' : status === 'sent' ? '✓ Sent!' : 'Send invite'}
+        </button>
+      </div>
+      {status === 'error' && <p className="text-xs text-red-400">{errMsg}</p>}
+      {status === 'sent'  && <p className="text-xs text-green-400">Invite sent! They'll get an email with a link to join.</p>}
+    </div>
+  )
+}
+
 // ── Settings Tab ──────────────────────────────────────────────
 
 function SettingsTab({ config, saveConfig }: { config: ReturnType<typeof useConfig>['config'], saveConfig: ReturnType<typeof useConfig>['saveConfig'] }) {
@@ -576,6 +634,8 @@ function SettingsTab({ config, saveConfig }: { config: ReturnType<typeof useConf
           <option value="light">Light</option>
         </select>
       </label>
+
+      <InviteSection />
 
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Change PIN</p>

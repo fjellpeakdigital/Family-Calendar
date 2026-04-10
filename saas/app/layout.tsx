@@ -4,7 +4,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'FamilyDash',
   description: "Your family's shared dashboard — calendar, chores, and more.",
-  robots: { index: false, follow: false },
+  robots: { index: true, follow: true },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

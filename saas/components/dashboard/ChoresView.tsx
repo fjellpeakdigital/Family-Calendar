@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ConfigJson, Person, ChoreDefinition } from '@/lib/supabase/types'
 
 interface Props {
   config: ConfigJson
   completions: Record<string, Record<string, boolean>> // { kidId: { choreId: true } }
   onToggle: (kidId: string, choreId: string) => void
+  onPointsChange: (kidId: string, newPoints: number) => void
   now: Date
 }
 
@@ -21,7 +22,7 @@ const PERIODS = [
 
 const PERIOD_ORDER = ['morning', 'afternoon', 'evening', 'anytime']
 
-export default function ChoresView({ config, completions, onToggle, now }: Props) {
+export default function ChoresView({ config, completions, onToggle, onPointsChange, now }: Props) {
   const kids = config.people.filter(p => p.type === 'kid')
   const dayName = DAY_SHORT[now.getDay()]
   const activePeriod = getActivePeriod(now.getHours())
@@ -46,6 +47,7 @@ export default function ChoresView({ config, completions, onToggle, now }: Props
           rewards={config.rewards[kid.id] ?? []}
           activePeriod={activePeriod}
           onToggle={(choreId) => onToggle(kid.id, choreId)}
+          onClaim={(rewardId, newPoints) => onPointsChange(kid.id, newPoints)}
         />
       ))}
     </div>
@@ -69,9 +71,10 @@ interface KidColProps {
   rewards: ConfigJson['rewards'][string]
   activePeriod: string | null
   onToggle: (choreId: string) => void
+  onClaim: (rewardId: string, newPoints: number) => void
 }
 
-function KidColumn({ kid, chores, completions, points, rewards, activePeriod, onToggle }: KidColProps) {
+function KidColumn({ kid, chores, completions, points, rewards, activePeriod, onToggle, onClaim }: KidColProps) {
   const sorted = useMemo(
     () => [...chores].sort((a, b) =>
       PERIOD_ORDER.indexOf(a.period ?? 'anytime') - PERIOD_ORDER.indexOf(b.period ?? 'anytime')
@@ -183,7 +186,7 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
 
       {/* Rewards panel */}
       {rewards.length > 0 && (
-        <RewardsPanel rewards={rewards} points={points} />
+        <RewardsPanel kidPersonId={kid.id} rewards={rewards} points={points} onClaim={onClaim} />
       )}
 
       {/* All done celebration */}
@@ -201,24 +204,54 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
 // ── Rewards Panel ──────────────────────────────────────────────
 
 function RewardsPanel({
+  kidPersonId,
   rewards,
   points,
+  onClaim,
 }: {
+  kidPersonId: string
   rewards: Array<{ id: string; name: string; emoji: string; points: number }>
   points: number
+  onClaim: (rewardId: string, newPoints: number) => void
 }) {
+  const [claiming, setClaiming] = useState<string | null>(null)
+  const [claimed,  setClaimed]  = useState<string | null>(null)
+
+  async function handleClaim(rewardId: string) {
+    setClaiming(rewardId)
+    try {
+      const res = await fetch('/api/rewards/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kidPersonId, rewardId }),
+      })
+      if (res.ok) {
+        const { newPoints } = await res.json()
+        onClaim(rewardId, newPoints)
+        setClaimed(rewardId)
+        setTimeout(() => setClaimed(null), 2500)
+      }
+    } finally {
+      setClaiming(null)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
       <span className="text-xs font-semibold uppercase tracking-widest text-gray-500">
         🏆 Rewards
       </span>
       {rewards.map(reward => {
-        const canClaim = points >= reward.points
+        const canClaim   = points >= reward.points
+        const isClaiming = claiming === reward.id
+        const isClaimed  = claimed  === reward.id
         return (
           <div
             key={reward.id}
             className={`flex items-center gap-2 rounded-xl border p-2 transition-all ${
-              canClaim
+              isClaimed
+                ? 'border-green-500/30 bg-green-500/5'
+                : canClaim
                 ? 'border-yellow-500/30 bg-yellow-500/5'
                 : 'border-white/5 bg-transparent'
             }`}
@@ -229,14 +262,17 @@ function RewardsPanel({
               <span className="text-xs text-gray-500">⭐ {reward.points} pts</span>
             </div>
             <button
-              disabled={!canClaim}
+              disabled={!canClaim || isClaiming}
+              onClick={() => handleClaim(reward.id)}
               className={`flex-shrink-0 rounded-lg px-3 py-1 text-xs font-bold transition-all active:scale-95 ${
-                canClaim
-                  ? 'bg-yellow-500 text-gray-900 hover:bg-yellow-400'
+                isClaimed
+                  ? 'bg-green-500/20 text-green-400'
+                  : canClaim
+                  ? 'bg-yellow-500 text-gray-900 hover:bg-yellow-400 disabled:opacity-60'
                   : 'cursor-default bg-white/10 text-gray-600'
               }`}
             >
-              {canClaim ? 'Claim!' : `${reward.points - points} more`}
+              {isClaimed ? '✓ Claimed!' : isClaiming ? '…' : canClaim ? 'Claim!' : `${reward.points - points} more`}
             </button>
           </div>
         )
