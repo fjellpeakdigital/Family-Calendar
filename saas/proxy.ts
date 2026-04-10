@@ -40,7 +40,7 @@ function applySecurityHeaders(res: NextResponse) {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Next.js needs unsafe-inline for hydration; tighten with nonces in prod
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https://openweathermap.org",
