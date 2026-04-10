@@ -15,6 +15,53 @@ interface Props {
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
+/**
+ * Assigns each event a column index and total column count so that
+ * overlapping events appear side-by-side rather than on top of each other.
+ */
+function layoutDayEvents(events: CalendarEvent[]) {
+  if (events.length === 0) return []
+
+  const sorted = [...events].sort(
+    (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+  )
+
+  type Positioned = CalendarEvent & { col: number; totalCols: number }
+  const positioned: Positioned[] = []
+  // Track the end time of the last event placed in each column
+  const colEnds: number[] = []
+
+  for (const ev of sorted) {
+    const evStart = new Date(ev.start).getTime()
+    const evEnd   = new Date(ev.end).getTime()
+
+    // Use the first column whose last event has already ended
+    let col = colEnds.findIndex(end => end <= evStart)
+    if (col === -1) {
+      col = colEnds.length
+      colEnds.push(evEnd)
+    } else {
+      colEnds[col] = evEnd
+    }
+
+    positioned.push({ ...ev, col, totalCols: 0 })
+  }
+
+  // totalCols = highest column index among all events that overlap this one + 1
+  for (const ev of positioned) {
+    const s = new Date(ev.start).getTime()
+    const e = new Date(ev.end).getTime()
+    const overlapping = positioned.filter(o => {
+      const os = new Date(o.start).getTime()
+      const oe = new Date(o.end).getTime()
+      return os < e && oe > s
+    })
+    ev.totalCols = Math.max(...overlapping.map(o => o.col)) + 1
+  }
+
+  return positioned
+}
+
 export default function CalendarView({ events, people, loading, now, use24h }: Props) {
   // Build the week starting on Monday
   const weekDays = useMemo(() => {
@@ -146,8 +193,8 @@ export default function CalendarView({ events, people, loading, now, use24h }: P
                   </div>
                 )}
 
-                {/* Events */}
-                {dayTimedEvents.map(ev => {
+                {/* Events — laid out side-by-side when overlapping */}
+                {layoutDayEvents(dayTimedEvents).map(ev => {
                   const start  = new Date(ev.start)
                   const end    = new Date(ev.end)
                   const top    = (start.getHours() + start.getMinutes() / 60) * 56
@@ -155,14 +202,19 @@ export default function CalendarView({ events, people, loading, now, use24h }: P
                     ((end.getTime() - start.getTime()) / 3_600_000) * 56,
                     20
                   )
+                  const pct   = 100 / ev.totalCols
+                  const left  = `calc(${ev.col * pct}% + 2px)`
+                  const width = `calc(${pct}% - 4px)`
 
                   return (
                     <div
                       key={ev.id}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-md px-1.5 py-1 text-xs"
+                      className="absolute overflow-hidden rounded-md px-1.5 py-1 text-xs"
                       style={{
                         top,
                         height,
+                        left,
+                        width,
                         background: ev.color + '33',
                         borderLeft: `3px solid ${ev.color}`,
                         color: ev.color,
