@@ -325,21 +325,15 @@ function ChoresTab({ config, saveConfig, familyPlan }: {
 
       {/* Existing chores */}
       <div className="space-y-2">
-        {config.chores.map(c => {
-          const periodMeta = PERIODS.find(p => p.key === c.period)
-          return (
-            <div key={c.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{c.task}</p>
-                <p className="text-xs text-gray-500">
-                  {c.days.join(', ')} · {periodMeta?.emoji} {c.period}
-                  {c.points > 0 && ` · ⭐ ${c.points}pts`}
-                </p>
-              </div>
-              <button onClick={() => removeChore(c.id)} className="text-gray-600 hover:text-red-400">✕</button>
-            </div>
-          )
-        })}
+        {config.chores.map(c => (
+          <ChoreRow
+            key={c.id}
+            chore={c}
+            kids={kids}
+            onSave={updated => saveConfig({ ...config, chores: config.chores.map(x => x.id === c.id ? updated : x) })}
+            onRemove={() => removeChore(c.id)}
+          />
+        ))}
       </div>
 
       {/* Add chore */}
@@ -393,6 +387,106 @@ function ChoresTab({ config, saveConfig, familyPlan }: {
           <a href="/billing" className="text-blue-400 hover:underline">Upgrade →</a>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Chore Row (inline edit) ───────────────────────────────────
+
+function ChoreRow({ chore, kids, onSave, onRemove }: {
+  chore: ChoreDefinition
+  kids: Person[]
+  onSave: (updated: ChoreDefinition) => void
+  onRemove: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [task,    setTask]    = useState(chore.task)
+  const [days,    setDays]    = useState(chore.days)
+  const [period,  setPeriod]  = useState<Period>(chore.period)
+  const [points,  setPoints]  = useState(chore.points)
+  const [kidIds,  setKidIds]  = useState(chore.kid_ids)
+
+  function open() {
+    setTask(chore.task); setDays(chore.days); setPeriod(chore.period)
+    setPoints(chore.points); setKidIds(chore.kid_ids)
+    setEditing(true)
+  }
+
+  function save() {
+    if (!task.trim()) return
+    onSave({ ...chore, task: task.trim(), days, period, points, kid_ids: kidIds })
+    setEditing(false)
+  }
+
+  function toggleDay(d: string) { setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]) }
+  function toggleKid(id: string) { setKidIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]) }
+
+  const periodMeta = PERIODS.find(p => p.key === chore.period)
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{chore.task}</p>
+          <p className="text-xs text-gray-500">
+            {chore.days.join(', ')} · {periodMeta?.emoji} {chore.period}
+            {chore.points > 0 && ` · ⭐ ${chore.points}pts`}
+          </p>
+        </div>
+        <button onClick={open} className="text-gray-600 hover:text-blue-400 text-sm" title="Edit">✏</button>
+        <button onClick={onRemove} className="text-gray-600 hover:text-red-400">✕</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-blue-500/30 bg-white/5 p-4 space-y-3">
+      <input
+        value={task}
+        onChange={e => setTask(e.target.value)}
+        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-blue-500/50"
+      />
+      <div className="flex flex-wrap gap-1">
+        {DAYS.map(d => (
+          <button key={d} onClick={() => toggleDay(d)}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${days.includes(d) ? 'bg-blue-500 text-white' : 'border border-white/15 text-gray-500'}`}>
+            {d}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <select value={period} onChange={e => setPeriod(e.target.value as Period)}
+          className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-2 py-1.5 text-xs">
+          {PERIODS.map(p => <option key={p.key} value={p.key}>{p.emoji} {p.label}</option>)}
+        </select>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500">⭐</span>
+          <input type="number" min="0" max="100" value={points} onChange={e => setPoints(Number(e.target.value))}
+            className="w-14 rounded-lg border border-white/10 bg-gray-900 px-2 py-1.5 text-center text-xs" />
+        </div>
+      </div>
+      {kids.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <span className="text-xs text-gray-500 self-center">For:</span>
+          {kids.map(k => (
+            <button key={k.id} onClick={() => toggleKid(k.id)}
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${kidIds.includes(k.id) ? 'text-white' : 'border border-white/15 text-gray-500'}`}
+              style={kidIds.includes(k.id) ? { background: k.color } : {}}>
+              {k.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button onClick={() => setEditing(false)}
+          className="flex-1 rounded-lg border border-white/15 py-1.5 text-xs text-gray-400 hover:bg-white/5">
+          Cancel
+        </button>
+        <button onClick={save} disabled={!task.trim()}
+          className="flex-1 rounded-lg bg-blue-500 py-1.5 text-xs font-semibold text-white hover:bg-blue-400 disabled:opacity-40">
+          Save
+        </button>
+      </div>
     </div>
   )
 }
