@@ -54,7 +54,7 @@ function PinScreen({ pin, onUnlock }: { pin: string; onUnlock: () => void }) {
         {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((key, i) => (
           key === '' ? <div key={i} /> :
           <button
-            key={key}
+            key={i}
             onClick={() => key === '⌫' ? setEntered(e => e.slice(0,-1)) : press(key)}
             className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-semibold text-white transition active:scale-95 hover:bg-white/10"
           >
