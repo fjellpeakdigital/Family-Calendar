@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import StepWelcome    from './StepWelcome'
 import StepPeople     from './StepPeople'
@@ -27,6 +27,20 @@ export default function OnboardingClient({ userEmail }: { userEmail: string }) {
     chores:          [],
     cal_assignments: [],
   })
+
+  // Restore progress after Google OAuth redirect (full-page reload wipes React state)
+  useEffect(() => {
+    const saved = sessionStorage.getItem('onboarding_resume')
+    if (!saved) return
+    sessionStorage.removeItem('onboarding_resume')
+    try {
+      const { step: s, state: st } = JSON.parse(saved) as { step: Step; state: OnboardingState }
+      if (STEPS.includes(s)) {
+        setStep(s)
+        setState(st)
+      }
+    } catch { /* ignore corrupt data */ }
+  }, [])
 
   const stepIndex = STEPS.indexOf(step)
 

@@ -52,7 +52,8 @@ export default function StepCalendars({ state, setState, onNext, onBack, userEma
   }
 
   function connectAccount() {
-    // Redirect to Google OAuth — server will store the token
+    // Save onboarding progress before the OAuth redirect wipes React state
+    sessionStorage.setItem('onboarding_resume', JSON.stringify({ step: 'calendars', state }))
     setConnecting(true)
     window.location.href = `/api/auth/signin/google?callbackUrl=${encodeURIComponent('/onboarding')}`
   }
