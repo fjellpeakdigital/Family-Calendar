@@ -22,7 +22,16 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i)
 function layoutDayEvents(events: CalendarEvent[]) {
   if (events.length === 0) return []
 
-  const sorted = [...events].sort(
+  // Deduplicate by id — the same recurring event instance can appear
+  // multiple times if it's on more than one connected calendar account.
+  const seen = new Set<string>()
+  const unique = events.filter(e => {
+    if (seen.has(e.id)) return false
+    seen.add(e.id)
+    return true
+  })
+
+  const sorted = [...unique].sort(
     (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
   )
 
