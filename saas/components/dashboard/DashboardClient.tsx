@@ -28,6 +28,7 @@ interface Props {
 
 const PAGES = ['calendar', 'chores'] as const
 type Page = typeof PAGES[number]
+type CalView = 'today' | 'week' | 'month'
 
 const PAGE_LABELS: Record<Page, string> = {
   calendar: 'Calendar',
@@ -38,6 +39,8 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   const { config } = useConfig()
   const [page, setPage]             = useState<Page>('calendar')
   const [now, setNow]               = useState(new Date())
+  const [calView, setCalView]       = useState<CalView>('week')
+  const [viewDate, setViewDate]     = useState(new Date())
   const [events, setEvents]         = useState<CalendarEvent[]>([])
   const [chores, setChores]         = useState<Record<string, Record<string, boolean>>>({})
   const [loadingCal, setLoadingCal] = useState(false)
@@ -52,18 +55,34 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   const fetchEvents = useCallback(async () => {
     setLoadingCal(true)
     try {
-      const today  = new Date()
-      const monday = new Date(today)
-      monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
-      monday.setHours(0, 0, 0, 0)
-      const sunday = new Date(monday)
-      sunday.setDate(monday.getDate() + 6)
-      sunday.setHours(23, 59, 59, 999)
-      const params = new URLSearchParams({ timeMin: monday.toISOString(), timeMax: sunday.toISOString() })
+      let timeMin: Date
+      let timeMax: Date
+
+      if (calView === 'today') {
+        timeMin = new Date(viewDate); timeMin.setHours(0, 0, 0, 0)
+        timeMax = new Date(viewDate); timeMax.setHours(23, 59, 59, 999)
+      } else if (calView === 'week') {
+        timeMin = new Date(viewDate)
+        timeMin.setDate(viewDate.getDate() - ((viewDate.getDay() + 6) % 7))
+        timeMin.setHours(0, 0, 0, 0)
+        timeMax = new Date(timeMin)
+        timeMax.setDate(timeMin.getDate() + 6)
+        timeMax.setHours(23, 59, 59, 999)
+      } else {
+        // Full calendar grid: Mon of week containing 1st → Sun of week containing last
+        timeMin = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
+        timeMin.setDate(timeMin.getDate() - ((timeMin.getDay() + 6) % 7))
+        timeMin.setHours(0, 0, 0, 0)
+        timeMax = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0)
+        timeMax.setDate(timeMax.getDate() + (7 - timeMax.getDay()) % 7)
+        timeMax.setHours(23, 59, 59, 999)
+      }
+
+      const params = new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() })
       const res = await fetch(`/api/calendar?${params}`)
       if (res.ok) setEvents((await res.json()).events ?? [])
     } finally { setLoadingCal(false) }
-  }, [])
+  }, [calView, viewDate])
 
   const fetchChores = useCallback(async () => {
     const today = now.toISOString().slice(0, 10)
@@ -130,8 +149,20 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
         {/* Page content */}
         <main className="flex-1 overflow-hidden">
           {page === 'calendar' && (
-            <CalendarView events={events} people={config.people} loading={loadingCal}
-              now={now} use24h={config.settings?.use24h ?? false} />
+            <CalendarView
+              events={events} people={config.people} loading={loadingCal}
+              now={now} use24h={config.settings?.use24h ?? false}
+              calView={calView} viewDate={viewDate}
+              onViewChange={v => { setCalView(v); if (v === 'today') setViewDate(new Date()) }}
+              onNavigate={dir => setViewDate(d => {
+                const next = new Date(d)
+                if (calView === 'today') next.setDate(d.getDate() + dir)
+                else if (calView === 'week') next.setDate(d.getDate() + dir * 7)
+                else next.setMonth(d.getMonth() + dir)
+                return next
+              })}
+              onGoToday={() => setViewDate(new Date())}
+            />
           )}
           {page === 'chores' && (
             <ChoresView config={config} completions={chores} onToggle={toggleChore} now={now} />
