@@ -4,7 +4,19 @@ import { useState, useRef, useEffect } from 'react'
 import { useConfig } from './ConfigProvider'
 import type { Person, ChoreDefinition, CalAssignment, Reward, Period } from '@/lib/supabase/types'
 
-const COLORS  = ['#58A6FF','#FF7EB3','#3FB950','#D29922','#F85149','#A371F7','#FFA657','#39D353']
+// Curated palette — Tailwind 500/600 level colors.
+// All satisfy WCAG 3:1 for large bold text on both the dark (#0F172A) and
+// light (#F8FAFC) app surfaces, and look great as background fills.
+const COLORS = [
+  '#3B82F6', // blue-500   — app primary
+  '#EC4899', // pink-500   — warm rose
+  '#059669', // emerald-600 — fresh green
+  '#D97706', // amber-600  — warm gold
+  '#EF4444', // red-500    — clear coral
+  '#8B5CF6', // violet-500 — soft purple
+  '#EA580C', // orange-600 — warm orange
+  '#0891B2', // cyan-600   — fresh teal
+]
 const DAYS    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
 const PERIODS: { key: Period; label: string; emoji: string }[] = [
   { key: 'morning',   label: 'Morning',   emoji: '🌅' },

@@ -3,9 +3,11 @@
 /* ── Base ──────────────────────────────────────────────────────────── */
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
-  background: #0D1117;
-  color: #F0F6FC;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: #0F172A;
+  color: #F1F5F9;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* ── Light theme ───────────────────────────────────────────────────── */
@@ -22,14 +24,16 @@ body {
 [data-theme="light"] {
   color-scheme: light;
 
-  /* Gray scale — reversed so dark-mode classes produce light-mode colors.
+  /* Gray scale — reversed so dark-mode Tailwind classes produce light-mode colors.
    * Crucially, gray-700/800 must stay visibly mid-gray (not near-white) so
-   * inactive nav dots, muted labels, and footer buttons remain clickable. */
-  --color-gray-950: oklch(0.985 0.002 247);   /* bg-gray-950 → page white     */
-  --color-gray-900: oklch(0.955 0.003 247);   /* bg-gray-900 → off-white      */
-  --color-gray-800: oklch(0.88  0.004 247);   /* subtle surfaces              */
+   * inactive nav dots, muted labels, and footer buttons remain clickable.
+   * Slight warm hue (chroma 0.003, hue 80) instead of cold blue-gray for a
+   * more refined, family-friendly feel. */
+  --color-gray-950: oklch(0.985 0.003 80);    /* bg-gray-950 → warm page white     */
+  --color-gray-900: oklch(0.958 0.004 80);    /* bg-gray-900 → warm off-white      */
+  --color-gray-800: oklch(0.89  0.005 80);    /* subtle warm surfaces              */
   --color-gray-700: oklch(0.62  0.006 247);   /* inactive dots, muted text — MUST be mid-gray */
-  --color-gray-600: oklch(0.45  0.008 247);   /* secondary labels             */
+  --color-gray-600: oklch(0.45  0.008 247);   /* secondary labels                  */
   --color-gray-500: oklch(0.38  0.008 247);
   --color-gray-400: oklch(0.30  0.008 247);
   --color-gray-300: oklch(0.22  0.008 247);
@@ -37,8 +41,6 @@ body {
 
   /* white → near-black so text-white → dark text */
   --color-white: oklch(0.13 0.01 247);
-
-  /* Soften borders — white/10 opacity on near-black reads as subtle dark line */
 }
 
 /* Fix backdrop-blur surfaces in light mode */
