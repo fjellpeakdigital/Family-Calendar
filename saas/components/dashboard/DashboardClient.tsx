@@ -139,8 +139,8 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   const theme = config.settings?.theme ?? 'dark'
 
   return (
-    <div data-theme={theme}>
-      <div className="flex h-full flex-col overflow-hidden">
+    <>
+      <div data-theme={theme} className="flex h-full flex-col overflow-hidden">
         {/* ── Header ── */}
         <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-y-1 border-b border-white/10 bg-gray-950/80 px-4 py-2 backdrop-blur sm:px-8 sm:py-3">
 
@@ -218,9 +218,9 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
       </div>
 
       {showAdmin && (
-        <AdminPanel onClose={() => setShowAdmin(false)} userEmail={userEmail} familyPlan={familyPlan} />
+        <AdminPanel onClose={() => setShowAdmin(false)} userEmail={userEmail} familyPlan={familyPlan} theme={theme} />
       )}
-    </div>
+    </>
   )
 }
 
