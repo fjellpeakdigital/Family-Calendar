@@ -11,7 +11,7 @@ const COLORS = [
   '#3B82F6', // blue-500   — app primary
   '#EC4899', // pink-500   — warm rose
   '#059669', // emerald-600 — fresh green
-  '#D97706', // amber-600  — warm gold
+  '#6366F1', // indigo-500 — blue-violet
   '#EF4444', // red-500    — clear coral
   '#8B5CF6', // violet-500 — soft purple
   '#EA580C', // orange-600 — warm orange

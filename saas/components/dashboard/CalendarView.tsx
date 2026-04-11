@@ -119,7 +119,7 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
             {(['today', 'week', 'month'] as CalView[]).map(v => (
               <button key={v} onClick={() => onViewChange(v)}
                 className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
-                  calView === v ? 'bg-blue-500 text-white' : 'text-gray-500 hover:text-white'
+                  calView === v ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-white'
                 }`}>
                 {v}
               </button>
@@ -174,10 +174,10 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
           const isToday = isoDate(day) === todayStr
           return (
             <div key={isoDate(day)} className="flex flex-1 flex-col items-center py-2">
-              <span className={`text-xs font-medium uppercase tracking-wider ${isToday ? 'text-blue-400' : 'text-gray-500'}`}>
+              <span className={`text-xs font-medium uppercase tracking-wider ${isToday ? 'text-indigo-400' : 'text-gray-500'}`}>
                 {DAY_NAMES[day.getDay()]}
               </span>
-              <span className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-blue-500 text-white' : 'text-white'}`}>
+              <span className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-indigo-600 text-white' : 'text-white'}`}>
                 {day.getDate()}
               </span>
             </div>
@@ -232,7 +232,7 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
 
             return (
               <div key={ds}
-                className={`relative flex-1 border-l border-white/5 ${isToday ? 'bg-blue-950/10' : ''}`}
+                className={`relative flex-1 border-l border-white/5 ${isToday ? 'bg-indigo-950/10' : ''}`}
                 style={{ minHeight: `${24 * ROW_HEIGHT}px` }}>
                 {HOURS.map(h => (
                   <div key={h} className="absolute w-full border-t border-white/5" style={{ top: h * ROW_HEIGHT }} />
@@ -243,8 +243,8 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
                   <div className="absolute z-10 w-full"
                     style={{ top: (now.getHours() + now.getMinutes() / 60) * ROW_HEIGHT }}>
                     <div className="relative">
-                      <div className="absolute -left-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-blue-400" />
-                      <div className="h-px bg-blue-400 opacity-60" />
+                      <div className="absolute -left-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-indigo-400" />
+                      <div className="h-px bg-indigo-400 opacity-60" />
                     </div>
                   </div>
                 )}
@@ -336,7 +336,7 @@ function MonthView({ events, viewDate, todayStr }: {
             <div key={ds}
               className={`min-h-0 border-b border-r border-white/5 p-1 ${inMonth ? '' : 'opacity-30'}`}>
               <div className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                isToday ? 'bg-blue-500 text-white' : 'text-gray-400'
+                isToday ? 'bg-indigo-600 text-white' : 'text-gray-400'
               }`}>
                 {day.getDate()}
               </div>

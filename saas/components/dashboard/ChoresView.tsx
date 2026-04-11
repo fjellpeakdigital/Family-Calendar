@@ -130,7 +130,7 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
                   {showDiv && (
                     <div
                       className={`mb-1 flex items-center gap-1 px-1 text-xs font-semibold uppercase tracking-widest ${
-                        period === activePeriod ? 'text-blue-400' : 'text-gray-600'
+                        period === activePeriod ? 'text-indigo-400' : 'text-gray-600'
                       }`}
                     >
                       <span>{meta?.emoji} {meta?.label}</span>
