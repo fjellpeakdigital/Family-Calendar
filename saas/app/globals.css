@@ -22,14 +22,16 @@ body {
 [data-theme="light"] {
   color-scheme: light;
 
-  /* Gray scale — reversed */
-  --color-gray-950: oklch(0.985 0.002 247);   /* was near-black → near-white  */
-  --color-gray-900: oklch(0.965 0.003 247);   /* was very dark  → light gray  */
-  --color-gray-800: oklch(0.93  0.004 247);
-  --color-gray-700: oklch(0.87  0.005 247);
-  --color-gray-600: oklch(0.48  0.008 247);   /* mid-gray stays readable      */
-  --color-gray-500: oklch(0.40  0.008 247);
-  --color-gray-400: oklch(0.32  0.008 247);
+  /* Gray scale — reversed so dark-mode classes produce light-mode colors.
+   * Crucially, gray-700/800 must stay visibly mid-gray (not near-white) so
+   * inactive nav dots, muted labels, and footer buttons remain clickable. */
+  --color-gray-950: oklch(0.985 0.002 247);   /* bg-gray-950 → page white     */
+  --color-gray-900: oklch(0.955 0.003 247);   /* bg-gray-900 → off-white      */
+  --color-gray-800: oklch(0.88  0.004 247);   /* subtle surfaces              */
+  --color-gray-700: oklch(0.62  0.006 247);   /* inactive dots, muted text — MUST be mid-gray */
+  --color-gray-600: oklch(0.45  0.008 247);   /* secondary labels             */
+  --color-gray-500: oklch(0.38  0.008 247);
+  --color-gray-400: oklch(0.30  0.008 247);
   --color-gray-300: oklch(0.22  0.008 247);
   --color-gray-200: oklch(0.14  0.008 247);
 

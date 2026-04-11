@@ -45,6 +45,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   const [page, setPage]             = useState<Page>('calendar')
   // Start null so the clock/date always come from the client (avoids UTC mismatch during SSR)
   const [now, setNow]               = useState<Date | null>(null)
+  const [todayStr, setTodayStr]     = useState('')
   const [calView, setCalView]       = useState<CalView>('week')
   const [viewDate, setViewDate]     = useState(new Date())
   const [events, setEvents]         = useState<CalendarEvent[]>([])
@@ -58,6 +59,14 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
     setNow(new Date())
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  // todayStr — stable date string, only changes at midnight; drives chore fetches
+  useEffect(() => {
+    const update = () => setTodayStr(localDateStr(new Date()))
+    update()
+    const t = setInterval(update, 60_000)
+    return () => clearInterval(t)
   }, [])
 
   // Portrait detection — switch calendar to Today view in portrait
@@ -74,7 +83,6 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   }, [])
 
   const fetchEvents = useCallback(async () => {
-    if (!now) return
     setLoadingCal(true)
     try {
       let timeMin: Date
@@ -103,12 +111,11 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
       const res = await fetch(`/api/calendar?${params}`)
       if (res.ok) setEvents((await res.json()).events ?? [])
     } finally { setLoadingCal(false) }
-  }, [calView, viewDate, now])
+  }, [calView, viewDate])
 
   const fetchChores = useCallback(async () => {
-    if (!now) return
-    const today = localDateStr(now)   // local date, never UTC
-    const res = await fetch(`/api/chores?date=${today}`)
+    if (!todayStr) return
+    const res = await fetch(`/api/chores?date=${todayStr}`)
     if (!res.ok) return
     const data = await res.json()
     const map: Record<string, Record<string, boolean>> = {}
@@ -117,30 +124,29 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
       map[c.kid_person_id][c.chore_id] = true
     }
     setChores(map)
-  }, [now])
+  }, [todayStr])
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
   useEffect(() => { fetchChores() }, [fetchChores])
 
   const toggleChore = useCallback(async (kidId: string, choreId: string) => {
-    if (!now) return
-    const today       = localDateStr(now)   // local date, never UTC
+    if (!todayStr) return
     const currentDone = chores[kidId]?.[choreId] ?? false
     const newDone     = !currentDone
     setChores(prev => ({ ...prev, [kidId]: { ...prev[kidId], [choreId]: newDone } }))
     const res = await fetch('/api/chores', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kidPersonId: kidId, choreId, date: today, done: newDone }),
+      body: JSON.stringify({ kidPersonId: kidId, choreId, date: todayStr, done: newDone }),
     })
     if (!res.ok) setChores(prev => ({ ...prev, [kidId]: { ...prev[kidId], [choreId]: currentDone } }))
-  }, [now, chores])
+  }, [todayStr, chores])
 
   const theme = config.settings?.theme ?? 'dark'
 
   return (
     <>
-      <div data-theme={theme} className="flex h-full flex-col overflow-hidden">
+      <div data-theme={theme} className="flex h-full flex-col overflow-hidden bg-gray-950 text-white">
         {/* ── Header ── */}
         <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-y-1 border-b border-white/10 bg-gray-950/80 px-4 py-2 backdrop-blur sm:px-8 sm:py-3">
 
