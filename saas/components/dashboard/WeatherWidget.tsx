@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Thermometer, Cloud } from 'lucide-react'
 
 interface WeatherData {
   temp:        number
@@ -49,7 +50,7 @@ export default function WeatherWidget({ location }: { location: string }) {
   if (!weather && !error) {
     return (
       <div className="flex items-center gap-1.5 text-gray-600">
-        <span className="text-lg">🌡</span>
+        <Thermometer className="h-4 w-4" />
         <span className="text-xs">—°</span>
       </div>
     )
@@ -58,7 +59,10 @@ export default function WeatherWidget({ location }: { location: string }) {
   // Error (bad API key, location not found, etc.)
   if (error || !weather) {
     return (
-      <span className="hidden text-xs text-gray-700 sm:inline" title="Weather unavailable">⛅ —°</span>
+      <div className="hidden items-center gap-1 text-gray-600 sm:flex" title="Weather unavailable">
+        <Cloud className="h-4 w-4" />
+        <span className="text-xs">—°</span>
+      </div>
     )
   }
 
