@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ── Base ──────────────────────────────────────────────────────────── */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  background: #0D1117;
+  color: #F0F6FC;
+}
+
+/* ── Light theme ───────────────────────────────────────────────────── */
+/*
+ * Tailwind v4 resolves color utilities (bg-gray-950, text-white, etc.)
+ * to var(--color-*) CSS variables. Overriding these variables inside a
+ * [data-theme="light"] block remaps the entire palette for that subtree
+ * without touching any component source files.
+ *
+ * Strategy: invert the gray scale so near-black → near-white and vice versa.
+ * Blues and greens keep their original hue so accents remain recognisable.
+ */
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Gray scale — reversed */
+  --color-gray-950: oklch(0.985 0.002 247);   /* was near-black → near-white  */
+  --color-gray-900: oklch(0.965 0.003 247);   /* was very dark  → light gray  */
+  --color-gray-800: oklch(0.93  0.004 247);
+  --color-gray-700: oklch(0.87  0.005 247);
+  --color-gray-600: oklch(0.48  0.008 247);   /* mid-gray stays readable      */
+  --color-gray-500: oklch(0.40  0.008 247);
+  --color-gray-400: oklch(0.32  0.008 247);
+  --color-gray-300: oklch(0.22  0.008 247);
+  --color-gray-200: oklch(0.14  0.008 247);
+
+  /* white → near-black so text-white → dark text */
+  --color-white: oklch(0.13 0.01 247);
+
+  /* Soften borders — white/10 opacity on near-black reads as subtle dark line */
+}
+
+/* Fix backdrop-blur surfaces in light mode */
+[data-theme="light"] header,
+[data-theme="light"] footer {
+  background-color: color-mix(in oklch, oklch(0.985 0.002 247) 85%, transparent) !important;
+  border-color: rgba(0,0,0,0.1) !important;
+}
+
+/* Calendar grid lines in light mode */
+[data-theme="light"] .border-white\/5  { border-color: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.10) !important; }
+
+/* ── Portrait tablet layout ────────────────────────────────────────── */
+
+@media (orientation: portrait) {
+  /* Header: allow wrapping and compress vertical padding */
+  header {
+    padding-top:    0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    padding-left:   1rem   !important;
+    padding-right:  1rem   !important;
+  }
+
+  /* Chores: allow horizontal scroll when kids are side-by-side */
+  .chores-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Calendar time grid: reduce gutter to save horizontal space */
+  .cal-gutter { width: 2.5rem !important; }
 }

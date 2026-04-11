@@ -14,6 +14,7 @@ interface Props {
   use24h:        boolean
   calView:       CalView
   viewDate:      Date
+  portrait:      boolean
   onViewChange:  (v: CalView) => void
   onNavigate:    (dir: -1 | 1) => void
   onGoToday:     () => void
@@ -93,7 +94,7 @@ function layoutDayEvents(events: CalendarEvent[]) {
 
 // ── Root component ─────────────────────────────────────────────
 
-export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, onViewChange, onNavigate, onGoToday }: Props) {
+export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, onViewChange, onNavigate, onGoToday }: Props) {
   const todayStr = isoDate(now)
 
   return (
@@ -112,16 +113,19 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
           <span className="ml-3 text-sm font-semibold text-white">{viewTitle(calView, viewDate)}</span>
         </div>
 
-        <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
-          {(['today', 'week', 'month'] as CalView[]).map(v => (
-            <button key={v} onClick={() => onViewChange(v)}
-              className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
-                calView === v ? 'bg-blue-500 text-white' : 'text-gray-500 hover:text-white'
-              }`}>
-              {v}
-            </button>
-          ))}
-        </div>
+        {/* Hide week/month tabs in portrait — single-day is the only usable view */}
+        {!portrait && (
+          <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
+            {(['today', 'week', 'month'] as CalView[]).map(v => (
+              <button key={v} onClick={() => onViewChange(v)}
+                className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
+                  calView === v ? 'bg-blue-500 text-white' : 'text-gray-500 hover:text-white'
+                }`}>
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading && (

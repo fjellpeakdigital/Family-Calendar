@@ -3,39 +3,67 @@
 import { useState, useEffect } from 'react'
 
 interface WeatherData {
-  temp: number
+  temp:        number
+  feelsLike:   number
   description: string
-  icon: string
-  location: string
-  humidity: number
-  windSpeed: number
+  icon:        string
+  humidity:    number
+  windSpeed:   number
+  location:    string
 }
 
 export default function WeatherWidget({ location }: { location: string }) {
   const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [error,   setError]   = useState(false)
 
   useEffect(() => {
     if (!location) return
 
     let cancelled = false
+    setError(false)
+
     const load = async () => {
       try {
         const res = await fetch('/api/weather')
-        if (!res.ok || cancelled) return
+        if (!res.ok || cancelled) { if (!cancelled) setError(true); return }
         const data = await res.json()
-        if (!cancelled) setWeather(data)
-      } catch {}
+        if (!cancelled) { setWeather(data); setError(false) }
+      } catch { if (!cancelled) setError(true) }
     }
 
     load()
-    const timer = setInterval(load, 15 * 60 * 1000) // refresh every 15 min
+    const timer = setInterval(load, 15 * 60 * 1000)
     return () => { cancelled = true; clearInterval(timer) }
   }, [location])
 
-  if (!weather) return null
+  // No location configured — subtle prompt
+  if (!location) {
+    return (
+      <span className="hidden text-xs text-gray-700 sm:inline">
+        Set location in Admin → Settings
+      </span>
+    )
+  }
+
+  // Loading
+  if (!weather && !error) {
+    return (
+      <div className="flex items-center gap-1.5 text-gray-600">
+        <span className="text-lg">🌡</span>
+        <span className="text-xs">—°</span>
+      </div>
+    )
+  }
+
+  // Error (bad API key, location not found, etc.)
+  if (error || !weather) {
+    return (
+      <span className="hidden text-xs text-gray-700 sm:inline" title="Weather unavailable">⛅ —°</span>
+    )
+  }
 
   return (
-    <div className="flex items-center gap-2 text-sm text-gray-400">
+    <div className="flex items-center gap-2 text-sm">
       <img
         src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
         alt={weather.description}
@@ -45,7 +73,7 @@ export default function WeatherWidget({ location }: { location: string }) {
       />
       <div className="flex flex-col leading-tight">
         <span className="text-base font-semibold text-white">{weather.temp}°F</span>
-        <span className="text-xs capitalize text-gray-500">{weather.description}</span>
+        <span className="hidden text-xs capitalize text-gray-500 sm:inline">{weather.description}</span>
       </div>
     </div>
   )

@@ -35,24 +35,46 @@ const PAGE_LABELS: Record<Page, string> = {
   chores:   'Chores',
 }
 
+/** Returns YYYY-MM-DD in the user's LOCAL timezone — never UTC. */
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function DashboardClient({ userEmail, userName, familyPlan }: Props) {
   const { config, setConfig } = useConfig()
   const [page, setPage]             = useState<Page>('calendar')
-  const [now, setNow]               = useState(new Date())
+  // Start null so the clock/date always come from the client (avoids UTC mismatch during SSR)
+  const [now, setNow]               = useState<Date | null>(null)
   const [calView, setCalView]       = useState<CalView>('week')
   const [viewDate, setViewDate]     = useState(new Date())
   const [events, setEvents]         = useState<CalendarEvent[]>([])
   const [chores, setChores]         = useState<Record<string, Record<string, boolean>>>({})
   const [loadingCal, setLoadingCal] = useState(false)
   const [showAdmin, setShowAdmin]   = useState(false)
+  const [portrait, setPortrait]     = useState(false)
 
-  // Clock
+  // Clock — runs client-side only, so now is always local time
   useEffect(() => {
+    setNow(new Date())
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
+  // Portrait detection — switch calendar to Today view in portrait
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait)')
+    const onChange = (e: MediaQueryListEvent) => {
+      setPortrait(e.matches)
+      if (e.matches) setCalView('today')
+    }
+    setPortrait(mq.matches)
+    if (mq.matches) setCalView('today')
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
   const fetchEvents = useCallback(async () => {
+    if (!now) return
     setLoadingCal(true)
     try {
       let timeMin: Date
@@ -69,7 +91,6 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
         timeMax.setDate(timeMin.getDate() + 6)
         timeMax.setHours(23, 59, 59, 999)
       } else {
-        // Full calendar grid: Mon of week containing 1st → Sun of week containing last
         timeMin = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
         timeMin.setDate(timeMin.getDate() - ((timeMin.getDay() + 6) % 7))
         timeMin.setHours(0, 0, 0, 0)
@@ -82,10 +103,11 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
       const res = await fetch(`/api/calendar?${params}`)
       if (res.ok) setEvents((await res.json()).events ?? [])
     } finally { setLoadingCal(false) }
-  }, [calView, viewDate])
+  }, [calView, viewDate, now])
 
   const fetchChores = useCallback(async () => {
-    const today = now.toISOString().slice(0, 10)
+    if (!now) return
+    const today = localDateStr(now)   // local date, never UTC
     const res = await fetch(`/api/chores?date=${today}`)
     if (!res.ok) return
     const data = await res.json()
@@ -101,9 +123,10 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   useEffect(() => { fetchChores() }, [fetchChores])
 
   const toggleChore = useCallback(async (kidId: string, choreId: string) => {
-    const today      = now.toISOString().slice(0, 10)
+    if (!now) return
+    const today       = localDateStr(now)   // local date, never UTC
     const currentDone = chores[kidId]?.[choreId] ?? false
-    const newDone    = !currentDone
+    const newDone     = !currentDone
     setChores(prev => ({ ...prev, [kidId]: { ...prev[kidId], [choreId]: newDone } }))
     const res = await fetch('/api/chores', {
       method: 'POST',
@@ -113,20 +136,25 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
     if (!res.ok) setChores(prev => ({ ...prev, [kidId]: { ...prev[kidId], [choreId]: currentDone } }))
   }, [now, chores])
 
+  const theme = config.settings?.theme ?? 'dark'
+
   return (
-    <>
+    <div data-theme={theme}>
       <div className="flex h-full flex-col overflow-hidden">
-        {/* Header */}
-        <header className="flex flex-shrink-0 items-center justify-between border-b border-white/10 bg-gray-950/80 px-8 py-3 backdrop-blur">
+        {/* ── Header ── */}
+        <header className="flex flex-shrink-0 flex-wrap items-center justify-between gap-y-1 border-b border-white/10 bg-gray-950/80 px-4 py-2 backdrop-blur sm:px-8 sm:py-3">
+
+          {/* Clock + date */}
           <div className="flex flex-col">
-            <span className="font-mono text-4xl font-bold leading-none tracking-tight text-white">
-              {formatTime(now, config.settings?.use24h)}
+            <span className="font-mono text-3xl font-bold leading-none tracking-tight text-white sm:text-4xl" suppressHydrationWarning>
+              {now ? formatTime(now, config.settings?.use24h) : '—:——'}
             </span>
-            <span className="mt-1 text-xs font-medium uppercase tracking-widest text-gray-500">
-              {formatDate(now)}
+            <span className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-500" suppressHydrationWarning>
+              {now ? formatDate(now) : ''}
             </span>
           </div>
 
+          {/* Page indicator */}
           <div className="flex flex-col items-center gap-1">
             <span className="text-xs font-semibold uppercase tracking-widest text-gray-600">
               {PAGE_LABELS[page]}
@@ -140,19 +168,21 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          {/* Weather + user */}
+          <div className="flex items-center gap-3">
             <WeatherWidget location={config.settings?.location ?? ''} />
-            <span className="text-xs text-gray-600">{userName ?? userEmail}</span>
+            <span className="hidden text-xs text-gray-600 sm:inline">{userName ?? userEmail}</span>
           </div>
         </header>
 
-        {/* Page content */}
+        {/* ── Page content ── */}
         <main className="flex-1 overflow-hidden">
-          {page === 'calendar' && (
+          {page === 'calendar' && now && (
             <CalendarView
               events={events} people={config.people} loading={loadingCal}
               now={now} use24h={config.settings?.use24h ?? false}
               calView={calView} viewDate={viewDate}
+              portrait={portrait}
               onViewChange={v => { setCalView(v); if (v === 'today') setViewDate(new Date()) }}
               onNavigate={dir => setViewDate(d => {
                 const next = new Date(d)
@@ -164,7 +194,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
               onGoToday={() => setViewDate(new Date())}
             />
           )}
-          {page === 'chores' && (
+          {page === 'chores' && now && (
             <ChoresView
               config={config}
               completions={chores}
@@ -177,7 +207,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
           )}
         </main>
 
-        {/* Footer */}
+        {/* ── Footer ── */}
         <footer className="flex flex-shrink-0 items-center justify-between border-t border-white/10 bg-gray-950/80 px-6 py-2">
           <span className="text-xs capitalize text-gray-700">{familyPlan} plan</span>
           <button onClick={() => setShowAdmin(true)}
@@ -190,7 +220,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
       {showAdmin && (
         <AdminPanel onClose={() => setShowAdmin(false)} userEmail={userEmail} familyPlan={familyPlan} />
       )}
-    </>
+    </div>
   )
 }
 

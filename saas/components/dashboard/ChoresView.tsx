@@ -36,7 +36,7 @@ export default function ChoresView({ config, completions, onToggle, onPointsChan
   }
 
   return (
-    <div className="flex h-full gap-4 overflow-hidden p-4">
+    <div className="chores-scroll flex h-full gap-4 overflow-x-auto overflow-y-hidden p-4">
       {kids.map(kid => (
         <KidColumn
           key={kid.id}
