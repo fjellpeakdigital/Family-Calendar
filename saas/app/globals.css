@@ -48,9 +48,27 @@ body {
   border-color: rgba(0,0,0,0.1) !important;
 }
 
-/* Calendar grid lines in light mode */
-[data-theme="light"] .border-white\/5  { border-color: rgba(0,0,0,0.06) !important; }
-[data-theme="light"] .border-white\/10 { border-color: rgba(0,0,0,0.10) !important; }
+/*
+ * bg-white/N and border-white/N utilities use literal rgb(255 255 255 / N%)
+ * — they are NOT driven by CSS variables, so the theme overrides above have
+ * no effect on them. Remap them to dark-translucent equivalents in light mode
+ * so card backgrounds and borders remain visible on a light surface.
+ */
+[data-theme="light"] [class*="bg-white/"]     { background-color: rgba(0,0,0,0.05)  !important; }
+[data-theme="light"] [class*="border-white/"] { border-color:      rgba(0,0,0,0.12)  !important; }
+
+/* Form elements: fix text colour (inherits body near-white by default)
+   and give inputs a subtly tinted background so they're distinguishable. */
+[data-theme="light"] input:not([type="color"]):not([type="checkbox"]):not([type="radio"]) {
+  background-color: rgba(0,0,0,0.05) !important;
+  color: oklch(0.13 0.01 247) !important;
+}
+[data-theme="light"] input::placeholder { color: oklch(0.52 0.007 247) !important; opacity: 1; }
+[data-theme="light"] select {
+  background-color: oklch(0.91 0.004 247) !important;
+  border-color: rgba(0,0,0,0.15) !important;
+  color: oklch(0.13 0.01 247) !important;
+}
 
 /* ── Portrait tablet layout ────────────────────────────────────────── */
 

@@ -78,7 +78,7 @@ export default function AdminPanel({ onClose, userEmail, familyPlan, theme }: Pr
 
   if (!unlocked) {
     return (
-      <div data-theme={theme} className="fixed inset-0 z-50 bg-gray-950/95 backdrop-blur">
+      <div data-theme={theme} className="fixed inset-0 z-50 bg-gray-950/95 backdrop-blur text-white">
         <button onClick={onClose} className="absolute right-4 top-4 text-gray-500 hover:text-white">✕</button>
         <PinScreen pin={pin} onUnlock={() => setUnlocked(true)} />
       </div>
@@ -86,7 +86,7 @@ export default function AdminPanel({ onClose, userEmail, familyPlan, theme }: Pr
   }
 
   return (
-    <div data-theme={theme} className="fixed inset-0 z-50 flex flex-col bg-gray-950/98 backdrop-blur">
+    <div data-theme={theme} className="fixed inset-0 z-50 flex flex-col bg-gray-950/98 backdrop-blur text-white">
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
         <h2 className="text-lg font-bold text-white">Admin Panel</h2>
