@@ -94,7 +94,7 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
     >
       {/* Header */}
       <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <span className="text-xl font-bold" style={{ color: kid.color }}>
+        <span className="text-xl font-bold text-white/80">
           {kid.name}
         </span>
         <span className="flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-0.5 text-xs font-bold text-yellow-400">

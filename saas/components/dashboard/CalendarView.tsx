@@ -174,10 +174,10 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
           const isToday = isoDate(day) === todayStr
           return (
             <div key={isoDate(day)} className="flex flex-1 flex-col items-center py-2">
-              <span className={`text-xs font-medium uppercase tracking-wider ${isToday ? 'text-white' : 'text-gray-500'}`}>
+              <span className={`text-xs font-medium uppercase tracking-wider ${isToday ? 'text-sky-300' : 'text-gray-500'}`}>
                 {DAY_NAMES[day.getDay()]}
               </span>
-              <span className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-white text-slate-900' : 'text-white'}`}>
+              <span className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/40' : 'text-white'}`}>
                 {day.getDate()}
               </span>
             </div>
@@ -232,7 +232,7 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
 
             return (
               <div key={ds}
-                className={`relative flex-1 border-l border-white/5 ${isToday ? 'bg-white/[0.02]' : ''}`}
+                className={`relative flex-1 border-l border-white/5 ${isToday ? 'bg-sky-500/[0.05]' : ''}`}
                 style={{ minHeight: `${24 * ROW_HEIGHT}px` }}>
                 {HOURS.map(h => (
                   <div key={h} className="absolute w-full border-t border-white/5" style={{ top: h * ROW_HEIGHT }} />
@@ -243,8 +243,8 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
                   <div className="absolute z-10 w-full"
                     style={{ top: (now.getHours() + now.getMinutes() / 60) * ROW_HEIGHT }}>
                     <div className="relative">
-                      <div className="absolute -left-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white/80" />
-                      <div className="h-px bg-white/40" />
+                      <div className="absolute -left-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-sky-400/70" />
+                      <div className="h-px bg-sky-400/40" />
                     </div>
                   </div>
                 )}
@@ -336,7 +336,7 @@ function MonthView({ events, viewDate, todayStr }: {
             <div key={ds}
               className={`min-h-0 border-b border-r border-white/5 p-1 ${inMonth ? '' : 'opacity-30'}`}>
               <div className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                isToday ? 'bg-white text-slate-900' : 'text-gray-400'
+                isToday ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/40' : 'text-gray-400'
               }`}>
                 {day.getDate()}
               </div>
