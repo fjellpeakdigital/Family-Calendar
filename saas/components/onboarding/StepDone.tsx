@@ -1,5 +1,6 @@
 'use client'
 
+import { Sparkles, Settings } from 'lucide-react'
 import type { OnboardingState } from './OnboardingClient'
 
 interface Props {
@@ -14,7 +15,7 @@ export default function StepDone({ state, onFinish, saving }: Props) {
 
   return (
     <div className="text-center">
-      <div className="mb-4 text-6xl">🎉</div>
+      <div className="mb-4 flex justify-center"><Sparkles className="h-14 w-14 text-yellow-400" strokeWidth={1.25} /></div>
       <h2 className="mb-2 text-2xl font-bold">You're all set!</h2>
       <p className="mb-8 text-gray-400">Here's what we'll save for your family:</p>
 
@@ -49,13 +50,13 @@ export default function StepDone({ state, onFinish, saving }: Props) {
       </div>
 
       <div className="mb-6 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-gray-400">
-        <p>You can change everything any time from the <strong className="text-white">⚙ Admin panel</strong> on the dashboard.</p>
+        <p>You can change everything any time from the <strong className="inline-flex items-center gap-1 text-white"><Settings className="h-3.5 w-3.5" /> Admin panel</strong> on the dashboard.</p>
       </div>
 
       <button
         onClick={onFinish}
         disabled={saving}
-        className="w-full rounded-xl bg-blue-500 py-3 font-semibold transition hover:bg-blue-400 disabled:opacity-50"
+        className="w-full rounded-xl bg-white/15 py-3 font-semibold ring-1 ring-white/20 transition hover:bg-white/20 disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Go to dashboard →'}
       </button>

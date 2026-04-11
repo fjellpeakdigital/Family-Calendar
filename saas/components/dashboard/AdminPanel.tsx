@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { X, Pencil, Star, Trophy, Sunrise, Sun, Moon, Clock } from 'lucide-react'
 import { useConfig } from './ConfigProvider'
 import type { Person, ChoreDefinition, CalAssignment, Reward, Period } from '@/lib/supabase/types'
 
@@ -18,11 +19,11 @@ const COLORS = [
   '#0891B2', // cyan-600   — fresh teal
 ]
 const DAYS    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-const PERIODS: { key: Period; label: string; emoji: string }[] = [
-  { key: 'morning',   label: 'Morning',   emoji: '🌅' },
-  { key: 'afternoon', label: 'Afternoon', emoji: '☀️' },
-  { key: 'evening',   label: 'Evening',   emoji: '🌙' },
-  { key: 'anytime',   label: 'Any time',  emoji: '🕐' },
+const PERIODS: { key: Period; label: string; Icon: React.ElementType }[] = [
+  { key: 'morning',   label: 'Morning',  Icon: Sunrise },
+  { key: 'afternoon', label: 'Afternoon',Icon: Sun     },
+  { key: 'evening',   label: 'Evening',  Icon: Moon    },
+  { key: 'anytime',   label: 'Any time', Icon: Clock   },
 ]
 const REWARD_EMOJIS = ['🎮','🍕','🎬','🧁','🏆','🎨','🚀','⭐','🎯','🎁']
 
@@ -91,7 +92,7 @@ export default function AdminPanel({ onClose, userEmail, familyPlan, theme }: Pr
   if (!unlocked) {
     return (
       <div data-theme={theme} className="fixed inset-0 z-50 bg-gray-950/95 backdrop-blur text-white">
-        <button onClick={onClose} className="absolute right-4 top-4 text-gray-500 hover:text-white">✕</button>
+        <button onClick={onClose} className="absolute right-4 top-4 text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
         <PinScreen pin={pin} onUnlock={() => setUnlocked(true)} />
       </div>
     )
@@ -102,7 +103,7 @@ export default function AdminPanel({ onClose, userEmail, familyPlan, theme }: Pr
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
         <h2 className="text-lg font-bold text-white">Admin Panel</h2>
-        <button onClick={onClose} className="text-gray-500 hover:text-white">✕</button>
+        <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
       </div>
 
       {/* Tabs */}
@@ -113,7 +114,7 @@ export default function AdminPanel({ onClose, userEmail, familyPlan, theme }: Pr
             onClick={() => setTab(t)}
             className={`rounded-t-lg px-4 py-2 text-sm font-semibold capitalize transition ${
               tab === t
-                ? 'border-b-2 border-blue-500 text-white'
+                ? 'border-b-2 border-white/60 text-white'
                 : 'text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -179,7 +180,7 @@ function PeopleTab({ config, saveConfig }: { config: ReturnType<typeof useConfig
             className="flex-1 bg-transparent text-sm outline-none"
           />
           <span className="text-xs text-gray-600">{p.type}</span>
-          <button onClick={() => removePerson(p.id)} className="text-gray-600 hover:text-red-400">✕</button>
+          <button onClick={() => removePerson(p.id)} className="text-gray-600 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
         </div>
       ))}
 
@@ -199,7 +200,7 @@ function PeopleTab({ config, saveConfig }: { config: ReturnType<typeof useConfig
           <div className="h-10 w-10 rounded-xl border border-white/10 cursor-pointer" style={{ background: color }} />
           <input type="color" value={color} onChange={e => setColor(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
         </div>
-        <button onClick={addPerson} className="rounded-xl bg-blue-500 px-3 py-2 text-sm font-semibold hover:bg-blue-400">Add</button>
+        <button onClick={addPerson} className="rounded-xl bg-white/15 px-3 py-2 text-sm font-semibold ring-1 ring-white/20 hover:bg-white/20">Add</button>
       </div>
     </div>
   )
@@ -357,15 +358,15 @@ function ChoresTab({ config, saveConfig, familyPlan }: {
         <div className="flex flex-wrap gap-1">
           {DAYS.map(d => (
             <button key={d} onClick={() => toggleDay(d)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${days.includes(d) ? 'bg-blue-500 text-white' : 'border border-white/15 text-gray-500'}`}>{d}</button>
+              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${days.includes(d) ? 'bg-white/20 text-white ring-1 ring-white/25' : 'border border-white/15 text-gray-500'}`}>{d}</button>
           ))}
         </div>
         <div className="flex gap-2">
           <select value={period} onChange={e => setPeriod(e.target.value as Period)} className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-2 py-1.5 text-xs">
-            {PERIODS.map(p => <option key={p.key} value={p.key}>{p.emoji} {p.label}</option>)}
+            {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-500">⭐</span>
+            <Star className="h-3 w-3 text-gray-500" />
             <input type="number" min="0" max="100" value={points} onChange={e => setPoints(Number(e.target.value))}
               className="w-14 rounded-lg border border-white/10 bg-gray-900 px-2 py-1.5 text-center text-xs" />
           </div>
@@ -396,7 +397,7 @@ function ChoresTab({ config, saveConfig, familyPlan }: {
         </div>
       ) : (
         <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-sm text-gray-400">
-          🏆 Rewards &amp; streaks are available on the <strong className="text-white">Family+ plan</strong>.{' '}
+          <Trophy className="mb-0.5 inline h-3.5 w-3.5 align-middle" /> Rewards &amp; streaks are available on the <strong className="text-white">Family+ plan</strong>.{' '}
           <a href="/billing" className="text-blue-400 hover:underline">Upgrade →</a>
         </div>
       )}
@@ -441,13 +442,13 @@ function ChoreRow({ chore, kids, onSave, onRemove }: {
       <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">{chore.task}</p>
-          <p className="text-xs text-gray-500">
-            {chore.days.join(', ')} · {periodMeta?.emoji} {chore.period}
-            {chore.points > 0 && ` · ⭐ ${chore.points}pts`}
+          <p className="flex items-center gap-1 text-xs text-gray-500">
+            {chore.days.join(', ')} · {periodMeta && <periodMeta.Icon className="h-3 w-3 inline" />} {chore.period}
+            {chore.points > 0 && <><Star className="ml-1 h-2.5 w-2.5 inline" /> {chore.points}pts</>}
           </p>
         </div>
-        <button onClick={open} className="text-gray-600 hover:text-blue-400 text-sm" title="Edit">✏</button>
-        <button onClick={onRemove} className="text-gray-600 hover:text-red-400">✕</button>
+        <button onClick={open} className="text-gray-600 hover:text-white" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
+        <button onClick={onRemove} className="text-gray-600 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
       </div>
     )
   }
@@ -462,7 +463,7 @@ function ChoreRow({ chore, kids, onSave, onRemove }: {
       <div className="flex flex-wrap gap-1">
         {DAYS.map(d => (
           <button key={d} onClick={() => toggleDay(d)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${days.includes(d) ? 'bg-blue-500 text-white' : 'border border-white/15 text-gray-500'}`}>
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${days.includes(d) ? 'bg-white/20 text-white ring-1 ring-white/25' : 'border border-white/15 text-gray-500'}`}>
             {d}
           </button>
         ))}
@@ -470,7 +471,7 @@ function ChoreRow({ chore, kids, onSave, onRemove }: {
       <div className="flex gap-2">
         <select value={period} onChange={e => setPeriod(e.target.value as Period)}
           className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-2 py-1.5 text-xs">
-          {PERIODS.map(p => <option key={p.key} value={p.key}>{p.emoji} {p.label}</option>)}
+          {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500">⭐</span>
@@ -496,7 +497,7 @@ function ChoreRow({ chore, kids, onSave, onRemove }: {
           Cancel
         </button>
         <button onClick={save} disabled={!task.trim()}
-          className="flex-1 rounded-lg bg-blue-500 py-1.5 text-xs font-semibold text-white hover:bg-blue-400 disabled:opacity-40">
+          className="flex-1 rounded-lg bg-white/15 py-1.5 text-xs font-semibold ring-1 ring-white/20 hover:bg-white/20 disabled:opacity-40">
           Save
         </button>
       </div>
@@ -522,8 +523,8 @@ function RewardsSection({ kid, rewards, onAdd, onRemove }: {
           <div key={r.id} className="flex items-center gap-2 text-sm">
             <span>{r.emoji}</span>
             <span className="flex-1">{r.name}</span>
-            <span className="text-xs text-gray-500">⭐ {r.points}</span>
-            <button onClick={() => onRemove(r.id)} className="text-gray-600 hover:text-red-400 text-xs">✕</button>
+            <span className="flex items-center gap-0.5 text-xs text-gray-500"><Star className="h-2.5 w-2.5" /> {r.points}</span>
+            <button onClick={() => onRemove(r.id)} className="text-gray-600 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
           </div>
         ))}
       </div>

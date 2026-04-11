@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { Sunrise, Sun, Moon, Clock, Star, Trophy, Sparkles } from 'lucide-react'
 import type { ConfigJson, Person, ChoreDefinition } from '@/lib/supabase/types'
 
 interface Props {
@@ -14,10 +15,10 @@ interface Props {
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const PERIODS = [
-  { key: 'morning',   label: 'Morning',   emoji: '🌅', startH:  5, endH: 12 },
-  { key: 'afternoon', label: 'Afternoon', emoji: '☀️',  startH: 12, endH: 17 },
-  { key: 'evening',   label: 'Evening',   emoji: '🌙', startH: 17, endH: 23 },
-  { key: 'anytime',   label: null,        emoji: '',   startH:  0, endH: 24 },
+  { key: 'morning',   label: 'Morning',   Icon: Sunrise, startH:  5, endH: 12 },
+  { key: 'afternoon', label: 'Afternoon', Icon: Sun,     startH: 12, endH: 17 },
+  { key: 'evening',   label: 'Evening',   Icon: Moon,    startH: 17, endH: 23 },
+  { key: 'anytime',   label: null,        Icon: Clock,   startH:  0, endH: 24 },
 ] as const
 
 const PERIOD_ORDER = ['morning', 'afternoon', 'evening', 'anytime']
@@ -96,8 +97,8 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
         <span className="text-xl font-bold" style={{ color: kid.color }}>
           {kid.name}
         </span>
-        <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-0.5 text-xs font-bold text-yellow-400">
-          ⭐ {points} pts
+        <span className="flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-0.5 text-xs font-bold text-yellow-400">
+          <Star className="h-3 w-3 fill-yellow-400" /> {points} pts
         </span>
         <span className="text-sm text-gray-500">{doneCount} / {chores.length} done</span>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
@@ -130,10 +131,11 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
                   {showDiv && (
                     <div
                       className={`mb-1 flex items-center gap-1 px-1 text-xs font-semibold uppercase tracking-widest ${
-                        period === activePeriod ? 'text-indigo-400' : 'text-gray-600'
+                        period === activePeriod ? 'text-white/80' : 'text-gray-600'
                       }`}
                     >
-                      <span>{meta?.emoji} {meta?.label}</span>
+                      {meta?.Icon && <meta.Icon className="h-3 w-3" />}
+                      <span>{meta?.label}</span>
                     </div>
                   )}
                   <button
@@ -167,13 +169,13 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
                     {/* Points badge */}
                     {pts > 0 && (
                       <span
-                        className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-bold transition-colors ${
+                        className={`flex flex-shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-bold transition-colors ${
                           done
                             ? 'bg-yellow-500/15 text-yellow-400'
                             : 'bg-white/10 text-gray-500'
                         }`}
                       >
-                        ⭐ {pts}
+                        <Star className={`h-2.5 w-2.5 ${done ? 'fill-yellow-400' : ''}`} /> {pts}
                       </span>
                     )}
                   </button>
@@ -192,7 +194,7 @@ function KidColumn({ kid, chores, completions, points, rewards, activePeriod, on
       {/* All done celebration */}
       {allDone && chores.length > 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-gray-950/80 backdrop-blur-sm">
-          <span className="text-5xl">🎉</span>
+          <Sparkles className="h-12 w-12 text-yellow-400" strokeWidth={1.5} />
           <span className="text-xl font-bold text-white">Amazing, {kid.name}!</span>
           <span className="text-sm text-gray-400">All done for today!</span>
         </div>
@@ -238,8 +240,8 @@ function RewardsPanel({
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
-      <span className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-        🏆 Rewards
+      <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-gray-500">
+        <Trophy className="h-3.5 w-3.5" /> Rewards
       </span>
       {rewards.map(reward => {
         const canClaim   = points >= reward.points
@@ -259,7 +261,7 @@ function RewardsPanel({
             <span className="text-xl">{reward.emoji || '🎁'}</span>
             <div className="flex flex-1 flex-col gap-0.5 min-w-0">
               <span className="truncate text-sm font-semibold text-white">{reward.name}</span>
-              <span className="text-xs text-gray-500">⭐ {reward.points} pts</span>
+              <span className="flex items-center gap-0.5 text-xs text-gray-500"><Star className="h-2.5 w-2.5" /> {reward.points} pts</span>
             </div>
             <button
               disabled={!canClaim || isClaiming}

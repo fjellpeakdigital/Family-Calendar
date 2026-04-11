@@ -1,15 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { X, Star } from 'lucide-react'
 import type { OnboardingState } from './OnboardingClient'
 import type { ChoreDefinition, Period } from '@/lib/supabase/types'
 
 const DAYS    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-const PERIODS: { key: Period; label: string; emoji: string }[] = [
-  { key: 'morning',   label: 'Morning',   emoji: '🌅' },
-  { key: 'afternoon', label: 'Afternoon', emoji: '☀️' },
-  { key: 'evening',   label: 'Evening',   emoji: '🌙' },
-  { key: 'anytime',   label: 'Any time',  emoji: '🕐' },
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'morning',   label: 'Morning'   },
+  { key: 'afternoon', label: 'Afternoon' },
+  { key: 'evening',   label: 'Evening'   },
+  { key: 'anytime',   label: 'Any time'  },
 ]
 
 // Starter chore templates
@@ -119,12 +120,12 @@ export default function StepChores({ state, setState, onNext, onBack }: Props) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{chore.task}</p>
                   <p className="text-xs text-gray-500">
-                    {chore.days.join(', ')} · {PERIODS.find(p => p.key === chore.period)?.emoji} {chore.period}
-                    {chore.points > 0 && ` · ⭐ ${chore.points}pts`}
+                    {chore.days.join(', ')} · {chore.period}
+                    {chore.points > 0 && ` · ${chore.points}pts`}
                     {assignedKids.length > 0 && ` · ${assignedKids.map(k => k.name).join(', ')}`}
                   </p>
                 </div>
-                <button onClick={() => removeChore(chore.id)} className="text-gray-600 hover:text-red-400">✕</button>
+                <button onClick={() => removeChore(chore.id)} className="text-gray-600 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
               </div>
             )
           })}
@@ -152,7 +153,7 @@ export default function StepChores({ state, setState, onNext, onBack }: Props) {
                 key={d}
                 onClick={() => toggleDay(d)}
                 className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                  newDays.includes(d) ? 'bg-blue-500 text-white' : 'border border-white/15 text-gray-500 hover:text-white'
+                  newDays.includes(d) ? 'bg-white/20 text-white ring-1 ring-white/25' : 'border border-white/15 text-gray-500 hover:text-white'
                 }`}
               >
                 {d}
@@ -168,11 +169,11 @@ export default function StepChores({ state, setState, onNext, onBack }: Props) {
               className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-2 py-1.5 text-xs"
             >
               {PERIODS.map(p => (
-                <option key={p.key} value={p.key}>{p.emoji} {p.label}</option>
+                <option key={p.key} value={p.key}>{p.label}</option>
               ))}
             </select>
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-500">⭐ pts:</span>
+              <span className="flex items-center gap-1 text-xs text-gray-500"><Star className="h-3 w-3" /> pts:</span>
               <input
                 type="number"
                 min="0"
@@ -228,7 +229,7 @@ export default function StepChores({ state, setState, onNext, onBack }: Props) {
         </button>
         <button
           onClick={onNext}
-          className="flex-1 rounded-xl bg-blue-500 py-2.5 text-sm font-semibold transition hover:bg-blue-400"
+          className="flex-1 rounded-xl bg-white/15 py-2.5 text-sm font-semibold ring-1 ring-white/20 transition hover:bg-white/20"
         >
           {state.chores.length === 0 ? 'Skip for now →' : 'Continue →'}
         </button>

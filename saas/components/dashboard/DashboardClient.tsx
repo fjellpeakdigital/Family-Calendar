@@ -168,7 +168,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
             <div className="flex gap-2">
               {PAGES.map(p => (
                 <button key={p} onClick={() => setPage(p)}
-                  className={`h-2 w-2 rounded-full transition-all ${page === p ? 'scale-125 bg-indigo-400' : 'bg-gray-700'}`}
+                  className={`h-2 w-2 rounded-full transition-all ${page === p ? 'scale-125 bg-white' : 'bg-gray-700'}`}
                   aria-label={PAGE_LABELS[p]} />
               ))}
             </div>
