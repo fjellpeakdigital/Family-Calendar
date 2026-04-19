@@ -6,16 +6,41 @@
  * No OAuth, no tokens; the calendarId itself is the URL. Reads are
  * cached for 15 minutes at the fetch layer so dashboard loads don't
  * re-download the feed on every request.
+ *
+ * node-ical is loaded lazily inside fetchRaw so the route module can
+ * be evaluated by Next.js's build-time page-data collector without
+ * triggering its module-load side effects (timezone table registration,
+ * dynamic CommonJS requires).
  */
 
-import ical from 'node-ical'
 import type { CalendarSourceAdapter, RawEvent, SourceFetchContext } from './types'
+
+// Minimal subset of node-ical's runtime types — kept here so we can
+// type the runtime values without forcing the package to be imported
+// statically. Mirrors @types/node-ical's VEvent and parseICS shapes.
+interface IcalRRule {
+  between(after: Date, before: Date, inclusive: boolean): Date[]
+}
+
+interface IcalVEvent {
+  type: 'VEVENT'
+  uid?:        string
+  summary?:    string
+  location?:   string
+  start?:      Date
+  end?:        Date
+  rrule?:      IcalRRule
+  recurrences?: Record<string, IcalVEvent>
+  exdate?:     Record<string, unknown>
+}
+
+type IcalParsed = Record<string, unknown>
 
 const FEED_TTL_SECONDS = 60 * 15
 const MAX_ICS_BYTES    = 2 * 1024 * 1024    // 2 MB cap per feed
 
-function toIso(d: Date | string): string {
-  return d instanceof Date ? d.toISOString() : new Date(d).toISOString()
+function toIso(d: Date): string {
+  return d.toISOString()
 }
 
 async function fetchFeed(url: string): Promise<string | null> {
@@ -28,7 +53,6 @@ async function fetchFeed(url: string): Promise<string | null> {
   })
   if (!resp.ok) return null
 
-  // Cap payload so a pathological feed can't exhaust memory
   const buf = await resp.arrayBuffer()
   if (buf.byteLength > MAX_ICS_BYTES) return null
   return new TextDecoder().decode(buf)
@@ -49,9 +73,12 @@ export const icsAdapter: CalendarSourceAdapter = {
     }
     if (!text) return []
 
-    let parsed: ical.CalendarResponse
+    // Lazy-load node-ical so the build-time route analyzer never
+    // executes its module-level setup (timezone registration, etc.).
+    let parsed: IcalParsed
     try {
-      parsed = ical.sync.parseICS(text)
+      const ical = (await import('node-ical')).default
+      parsed = ical.sync.parseICS(text) as IcalParsed
     } catch {
       return []
     }
@@ -63,15 +90,16 @@ export const icsAdapter: CalendarSourceAdapter = {
     const out: RawEvent[] = []
 
     for (const value of Object.values(parsed)) {
-      if (!value || typeof value !== 'object' || value.type !== 'VEVENT') continue
-      const ev = value as ical.VEvent
+      if (!value || typeof value !== 'object') continue
+      const maybe = value as { type?: string }
+      if (maybe.type !== 'VEVENT') continue
+      const ev = value as IcalVEvent
 
       if (ev.rrule) {
-        // Expand the rule inside our window, then overlay any overrides.
-        const overrides = ev.recurrences ?? {}
-        const exdateKeys = new Set(ev.exdate ? Object.keys(ev.exdate as object) : [])
+        const overrides  = ev.recurrences ?? {}
+        const exdateKeys = new Set(ev.exdate ? Object.keys(ev.exdate) : [])
         const occurrences = ev.rrule.between(
-          new Date(windowStart - dur(ev)),   // catch instances that started before the window but still overlap
+          new Date(windowStart - dur(ev)),
           new Date(windowEnd),
           true,
         )
@@ -80,7 +108,7 @@ export const icsAdapter: CalendarSourceAdapter = {
           const key = dateKey(occ)
           if (exdateKeys.has(key)) continue
 
-          const override  = (overrides as Record<string, ical.VEvent>)[key]
+          const override  = overrides[key]
           const effective = override ?? ev
           const instanceStart: Date =
             override?.start ? new Date(override.start) : occ
@@ -109,34 +137,32 @@ export const icsAdapter: CalendarSourceAdapter = {
   },
 }
 
-// Duration of the master event (fallback when override doesn't supply one).
-function dur(ev: ical.VEvent): number {
+function dur(ev: IcalVEvent): number {
   if (!ev.start || !ev.end) return 3600_000
   return new Date(ev.end).getTime() - new Date(ev.start).getTime()
 }
 
 function dateKey(d: Date): string {
-  // node-ical keys overrides/exceptions by YYYY-MM-DD of the original start.
   return d.toISOString().slice(0, 10)
 }
 
 function toRaw(
-  effective:     ical.VEvent,
-  master:        ical.VEvent,
+  effective:     IcalVEvent,
+  master:        IcalVEvent,
   instanceStart: Date,
   instanceEnd:   Date,
   isRecurring:   boolean,
 ): RawEvent {
-  const dtStart = effective.start as (Date & { dateOnly?: boolean }) | Date
-  const allDay = Boolean((dtStart as { dateOnly?: boolean }).dateOnly)
+  const dtStart = effective.start as (Date & { dateOnly?: boolean }) | undefined
+  const allDay  = Boolean(dtStart && (dtStart as { dateOnly?: boolean }).dateOnly)
 
   return {
-    sourceId:         effective.uid ?? `${master.uid}-${dateKey(instanceStart)}`,
-    title:            (effective.summary as string | undefined) ?? '(No title)',
+    sourceId:         effective.uid ?? `${master.uid ?? 'event'}-${dateKey(instanceStart)}`,
+    title:            effective.summary ?? '(No title)',
     start:            toIso(instanceStart),
     end:              toIso(instanceEnd),
     allDay,
-    location:         (effective.location as string | undefined) ?? null,
+    location:         effective.location ?? null,
     recurringEventId: isRecurring ? (master.uid ?? null) : null,
     originalStart:    isRecurring ? toIso(instanceStart) : null,
   }
