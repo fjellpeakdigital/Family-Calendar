@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
+import { getFamilyPlan } from '@/lib/subscription'
+import { getLimits } from '@/lib/limits'
 import type { QuietHours } from '@/lib/supabase/types'
 
 /**
@@ -87,6 +89,14 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json(
           { error: 'quiet_hours must be { start: "HH:mm", end: "HH:mm" } or null' },
           { status: 400 }
+        )
+      }
+      // Quiet hours is a paid feature. Saving null (clearing) is always allowed.
+      const plan = await getFamilyPlan(session.user.email)
+      if (!getLimits(plan).quietHours) {
+        return NextResponse.json(
+          { error: 'Quiet hours require the family_plus plan.', upgradeRequired: true, plan },
+          { status: 402 }
         )
       }
     }

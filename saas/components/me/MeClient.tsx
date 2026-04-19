@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CalendarDays, MapPin, Settings } from 'lucide-react'
-import type { CalendarEvent, Person } from '@/lib/supabase/types'
+import type { CalendarEvent, Person, Plan } from '@/lib/supabase/types'
 import MePreferences from './MePreferences'
 
 interface Props {
@@ -12,11 +12,12 @@ interface Props {
   userPersonId: string | null
   people:       Person[]
   use24h:       boolean
+  familyPlan:   Plan
 }
 
 const LOOK_AHEAD_DAYS = 7
 
-export default function MeClient({ userName, userEmail, userPersonId, people, use24h }: Props) {
+export default function MeClient({ userName, userEmail, userPersonId, people, use24h, familyPlan }: Props) {
   const [events, setEvents]   = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [showPrefs, setShowPrefs] = useState(false)
@@ -135,6 +136,7 @@ export default function MeClient({ userName, userEmail, userPersonId, people, us
         <MePreferences
           people={people}
           initialPersonId={userPersonId}
+          familyPlan={familyPlan}
           onClose={() => setShowPrefs(false)}
         />
       )}

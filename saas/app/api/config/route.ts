@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
+import { getFamilyPlan } from '@/lib/subscription'
+import { getLimits } from '@/lib/limits'
 import type { ConfigJson } from '@/lib/supabase/types'
 
 // GET /api/config — fetch family config (people, chores, settings, rewards)
@@ -59,6 +61,25 @@ export async function PUT(req: NextRequest) {
 
   // Sanitize: strip any keys we don't expect to prevent junk storage
   const safe = sanitizeConfig(body.config)
+
+  // Plan-gate the ICS feed count. Saving new feeds past the limit is
+  // rejected; saving a shorter list than before (e.g. a user removing
+  // feeds) is always allowed.
+  const plan   = await getFamilyPlan(session.user.email)
+  const limits = getLimits(plan)
+  const icsCount = safe.cal_assignments.filter(a => a.provider === 'ics').length
+  if (icsCount > limits.icsFeedsMax) {
+    return NextResponse.json(
+      {
+        error: limits.icsFeedsMax === 0
+          ? 'Calendar feeds require the family plan or higher.'
+          : `Your plan allows up to ${limits.icsFeedsMax} calendar feed(s).`,
+        upgradeRequired: true,
+        plan,
+      },
+      { status: 402 },
+    )
+  }
 
   const supabase = await createClient()
 

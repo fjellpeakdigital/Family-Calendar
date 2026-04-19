@@ -9,8 +9,10 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { decryptToken } from '@/lib/crypto'
 import { sendEventReminderEmail } from '@/lib/email'
 import { sendPushNotification } from '@/lib/push'
+import { getLimits } from '@/lib/limits'
 import type {
   AppSettings,
+  Plan,
   PushSubscriptionRecord,
   QuietHours,
   UserNotificationPrefs,
@@ -102,7 +104,7 @@ async function processFamily(
     horizonRows.map(r => seriesIdOf(r.event_key)).filter((x): x is string => !!x)
   ))
 
-  const [instRes, seriesRes, cfgRes, usersRes] = await Promise.all([
+  const [instRes, seriesRes, cfgRes, usersRes, familyRes] = await Promise.all([
     supabase
       .from('event_instance_overlay')
       .select('family_id, event_key, responsible_person_ids, offset_min')
@@ -124,7 +126,20 @@ async function processFamily(
       .from('users')
       .select('id, email, name, person_id')
       .eq('family_id', familyId),
+    supabase
+      .from('families')
+      .select('plan')
+      .eq('id', familyId)
+      .single(),
   ])
+
+  const plan   = ((familyRes.data?.plan as Plan | undefined) ?? 'free')
+  const limits = getLimits(plan)
+
+  // If the family's plan doesn't include any reminder channel at all,
+  // exit before doing any additional work. Upgrading re-enables
+  // reminders automatically — no data migration needed.
+  if (!limits.emailReminders && !limits.pushReminders) return 0
 
   const instances = (instRes.data ?? []) as InstanceOverlayRow[]
   const series    = (seriesRes.data ?? []) as SeriesOverlayRow[]
@@ -193,10 +208,10 @@ async function processFamily(
 
       if (isInQuietHours(remindAt, prefs?.quiet_hours ?? null)) continue
 
-      if (prefs?.email_enabled !== false) {
+      if (limits.emailReminders && prefs?.email_enabled !== false) {
         due.push({ row, personId, offsetMin, channel: 'email', user, endpoints: [] })
       }
-      if (prefs?.push_enabled && prefs.push_endpoints?.length > 0) {
+      if (limits.pushReminders && prefs?.push_enabled && prefs.push_endpoints?.length > 0) {
         due.push({
           row, personId, offsetMin, channel: 'push', user,
           endpoints: prefs.push_endpoints,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
+import { requirePlan } from '@/lib/subscription'
 import type { PushSubscriptionRecord, UserNotificationPrefs } from '@/lib/supabase/types'
 
 const MAX_ENDPOINTS_PER_USER = 5
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const denied = await requirePlan(session.user.email, 'family_plus')
+  if (denied) return NextResponse.json(denied, { status: 402 })
 
   let body: unknown
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

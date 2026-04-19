@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import MeClient from '@/components/me/MeClient'
-import type { ConfigJson } from '@/lib/supabase/types'
+import type { ConfigJson, Plan } from '@/lib/supabase/types'
 
 /**
  * /me — per-adult personal view.
@@ -25,13 +25,12 @@ export default async function MePage() {
 
   if (!user) redirect('/onboarding')
 
-  const { data: fc } = await supabase
-    .from('family_config')
-    .select('config_json')
-    .eq('family_id', user.family_id)
-    .single()
-
-  const config = (fc?.config_json as ConfigJson | null | undefined)
+  const [fcRes, familyRes] = await Promise.all([
+    supabase.from('family_config').select('config_json').eq('family_id', user.family_id).single(),
+    supabase.from('families').select('plan').eq('id', user.family_id).single(),
+  ])
+  const config     = (fcRes.data?.config_json as ConfigJson | null | undefined)
+  const familyPlan = (familyRes.data?.plan as Plan | undefined) ?? 'free'
 
   if (!config || config.people.length === 0) redirect('/onboarding')
 
@@ -42,6 +41,7 @@ export default async function MePage() {
       userPersonId={user.person_id ?? null}
       people={config.people}
       use24h={config.settings?.use24h ?? false}
+      familyPlan={familyPlan}
     />
   )
 }

@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { disablePush, ensurePushSubscription, getPushStatus } from '@/lib/push-client'
-import type { Person, QuietHours } from '@/lib/supabase/types'
+import { getLimits } from '@/lib/limits'
+import type { Person, Plan, QuietHours } from '@/lib/supabase/types'
 
 interface Props {
   people:           Person[]
   initialPersonId:  string | null
+  familyPlan:       Plan
   onClose:          () => void
 }
 
@@ -18,8 +20,9 @@ interface Prefs {
   default_offsets: number[]
 }
 
-export default function MePreferences({ people, initialPersonId, onClose }: Props) {
+export default function MePreferences({ people, initialPersonId, familyPlan, onClose }: Props) {
   const adults = people.filter(p => p.type === 'adult')
+  const limits = getLimits(familyPlan)
 
   const [personId, setPersonId] = useState<string | null>(initialPersonId)
   const [prefs, setPrefs]       = useState<Prefs | null>(null)
@@ -139,28 +142,36 @@ export default function MePreferences({ people, initialPersonId, onClose }: Prop
               Reminders
             </h3>
 
-            <label className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <label className={`flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 ${limits.emailReminders ? '' : 'opacity-60'}`}>
               <div>
                 <div className="text-sm">Email</div>
-                <div className="text-[11px] text-gray-500">Reminders to {emailDomainForUI()}</div>
+                <div className="text-[11px] text-gray-500">
+                  {limits.emailReminders
+                    ? `Reminders to ${emailDomainForUI()}`
+                    : <><a href="/billing" className="underline">Upgrade to Family</a> to enable email reminders.</>}
+                </div>
               </div>
               <input
                 type="checkbox"
-                disabled={!prefs || saving}
+                disabled={!prefs || saving || !limits.emailReminders}
                 checked={prefs?.email_enabled ?? true}
                 onChange={e => savePrefs({ email_enabled: e.target.checked })}
                 className="h-4 w-4 accent-indigo-400"
               />
             </label>
 
-            <label className={`flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 ${pushHelp(pushStatus).dim ? 'opacity-60' : ''}`}>
+            <label className={`flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 ${limits.pushReminders && !pushHelp(pushStatus).dim ? '' : 'opacity-60'}`}>
               <div className="min-w-0 flex-1 pr-3">
                 <div className="text-sm">Push</div>
-                <div className="text-[11px] text-gray-500">{pushHelp(pushStatus).message}</div>
+                <div className="text-[11px] text-gray-500">
+                  {limits.pushReminders
+                    ? pushHelp(pushStatus).message
+                    : <><a href="/billing" className="underline">Upgrade to Family+</a> to get push notifications.</>}
+                </div>
               </div>
               <input
                 type="checkbox"
-                disabled={pushBusy || pushHelp(pushStatus).blocked}
+                disabled={pushBusy || !limits.pushReminders || pushHelp(pushStatus).blocked}
                 checked={pushStatus === 'on'}
                 onChange={e => handlePushToggle(e.target.checked)}
                 className="h-4 w-4 accent-indigo-400"
@@ -173,11 +184,17 @@ export default function MePreferences({ people, initialPersonId, onClose }: Prop
             <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500">
               Quiet hours
             </h3>
-            <QuietHoursControl
-              value={prefs?.quiet_hours ?? null}
-              disabled={!prefs || saving}
-              onChange={v => savePrefs({ quiet_hours: v })}
-            />
+            {limits.quietHours ? (
+              <QuietHoursControl
+                value={prefs?.quiet_hours ?? null}
+                disabled={!prefs || saving}
+                onChange={v => savePrefs({ quiet_hours: v })}
+              />
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-gray-500">
+                Silence reminders overnight with a <a href="/billing" className="underline">Family+ plan</a>.
+              </div>
+            )}
           </section>
         </div>
       </div>
