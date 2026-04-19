@@ -414,7 +414,7 @@ window.Calendar = (() => {
           <div class="cal-tgrid-event-title">${ev.owner ? `<span class="ev-owner-prefix">${escapeHtml(ev.owner)}</span> – ` : ''}${escapeHtml(ev.title)}</div>
           ${showTime ? `<div class="cal-tgrid-event-time">${formatTime(ev.start, false)}${ev.end ? ` – ${formatTime(ev.end, false)}` : ''}</div>` : ''}
         `;
-        makeChipClickable(block, ev.id);
+        attachDraggableEvent(block, ev, duration);
         col.appendChild(block);
       });
 
@@ -501,6 +501,148 @@ window.Calendar = (() => {
     }
 
     container.appendChild(grid);
+  }
+
+  // ── Drag-to-reschedule in time grid ──────────────────────
+  // Distinguishes click from drag with an 8px threshold. Drags are snapped
+  // to 15-minute increments and can move across day columns. Recurring and
+  // all-day events are not draggable (they use the ordinary click path).
+  const DRAG_THRESHOLD_PX = 8;
+  const SNAP_MINUTES = 15;
+
+  function attachDraggableEvent(block, ev, durationHours) {
+    // Recurring events stay click-only; rescheduling a recurring series
+    // needs more UI than we have.
+    if (ev.recurring) {
+      makeChipClickable(block, ev.id);
+      return;
+    }
+
+    block.style.cursor = 'grab';
+    let startX = 0, startY = 0, dragging = false, suppressClick = false;
+    let originTop = 0, originLeft = 0, originWidth = 0;
+    let pointerId = null;
+
+    const onDown = (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      pointerId = e.pointerId;
+      startX = e.clientX; startY = e.clientY;
+      dragging = false; suppressClick = false;
+      const rect = block.getBoundingClientRect();
+      originTop   = parseFloat(block.style.top)  || 0;
+      originLeft  = block.offsetLeft;
+      originWidth = rect.width;
+      block.setPointerCapture?.(pointerId);
+      block.addEventListener('pointermove', onMove);
+      block.addEventListener('pointerup',   onUp);
+      block.addEventListener('pointercancel', onCancel);
+    };
+
+    const onMove = (e) => {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      if (!dragging) {
+        dragging = true;
+        suppressClick = true;
+        block.classList.add('cal-tgrid-event-dragging');
+        block.style.cursor = 'grabbing';
+      }
+      block.style.transform = `translate(${dx}px, ${dy}px)`;
+      block.style.zIndex = 20;
+    };
+
+    const commit = async (e) => {
+      block.releasePointerCapture?.(pointerId);
+      block.removeEventListener('pointermove', onMove);
+      block.removeEventListener('pointerup',   onUp);
+      block.removeEventListener('pointercancel', onCancel);
+      block.style.cursor = 'grab';
+      block.classList.remove('cal-tgrid-event-dragging');
+
+      if (!dragging) return;  // treated as a click
+      block.style.transform = '';
+      block.style.zIndex = '';
+
+      // Which day column is the pointer over now?
+      const targetCol = document.elementsFromPoint(e.clientX, e.clientY)
+        .find(el => el.classList && el.classList.contains('cal-tgrid-col'));
+
+      if (!targetCol) { render(); return; }
+
+      // Compute new start: column top → hour = GRID_START; snap to 15 min
+      const colRect = targetCol.getBoundingClientRect();
+      const yInCol  = e.clientY - colRect.top + targetCol.scrollTop;
+      // Use offsetTop of the event block to anchor the pointer; fall back to
+      // whole-block top if the hit is past the block's anchor.
+      const hourFloat = GRID_START + yInCol / HOUR_PX;
+      const snappedMin = Math.round(hourFloat * 60 / SNAP_MINUTES) * SNAP_MINUTES;
+      const newHour   = Math.max(GRID_START * 60, Math.min((GRID_END - durationHours) * 60, snappedMin)) / 60;
+
+      // Resolve the new date from the column's dayhead dataset — we tagged
+      // each column's index via its position in the grid; use the original
+      // event start's time components as a fallback.
+      const cols = [...targetCol.parentElement.children];
+      const newIdx = cols.indexOf(targetCol);
+      // Recover the day this column represents: rebuild from _viewDate
+      const viewStart = _view === '4day'
+        ? (() => { const d = new Date(_viewDate); d.setHours(0,0,0,0); return d; })()
+        : weekStart(_viewDate);
+      const newDay = addDays(viewStart, newIdx);
+
+      const startMinutes = Math.floor(newHour * 60);
+      const hh = Math.floor(startMinutes / 60);
+      const mm = startMinutes % 60;
+      const newStart = new Date(newDay);
+      newStart.setHours(hh, mm, 0, 0);
+      const newEnd   = new Date(newStart.getTime() + durationHours * 3600 * 1000);
+
+      const startIso = newStart.toISOString();
+      const endIso   = newEnd.toISOString();
+
+      // No-op? (same time + same day)
+      if (new Date(ev.start).getTime() === newStart.getTime()) {
+        render();
+        return;
+      }
+
+      try {
+        await updateEvent(ev, { startIso, endIso, allDay: false });
+        window.App?.showUndoToast?.(
+          `Moved "${ev.title}" to ${formatTime(startIso, false)}`,
+          () => updateEvent(ev, {
+            startIso: ev.start,
+            endIso:   ev.end || new Date(new Date(ev.start).getTime() + durationHours*3600*1000).toISOString(),
+            allDay: false,
+          }).catch(err => console.error('Undo failed:', err))
+        );
+      } catch (err) {
+        console.error('Reschedule failed:', err);
+        alert(`Couldn't reschedule: ${err.message || err}`);
+        render();  // snap the block back
+      }
+    };
+
+    const onUp = (e) => commit(e);
+    const onCancel = () => {
+      block.releasePointerCapture?.(pointerId);
+      block.removeEventListener('pointermove', onMove);
+      block.removeEventListener('pointerup',   onUp);
+      block.removeEventListener('pointercancel', onCancel);
+      block.style.transform = '';
+      block.style.zIndex = '';
+      block.classList.remove('cal-tgrid-event-dragging');
+      dragging = false;
+    };
+
+    block.addEventListener('pointerdown', onDown);
+
+    // Click handler — suppressed if the pointer actually moved
+    block.addEventListener('click', (e) => {
+      if (suppressClick) { suppressClick = false; e.stopPropagation(); return; }
+      e.stopPropagation();
+      showEventDetail(ev.id);
+    });
   }
 
   // ── Agenda View ───────────────────────────────────────────

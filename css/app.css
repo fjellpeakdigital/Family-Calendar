@@ -2871,3 +2871,14 @@ html[data-kid-mode="true"] .reward-claim-btn {
   color: var(--text-dim);
   font-style: italic;
 }
+
+/* ──────────────────────────────────────────────────────────
+   Time-grid event drag state
+   ────────────────────────────────────────────────────────── */
+.cal-tgrid-event-dragging {
+  opacity: 0.85;
+  filter: brightness(1.1) drop-shadow(0 8px 20px rgba(0,0,0,0.4));
+  cursor: grabbing !important;
+  transition: none !important;
+}
+.cal-tgrid-event { touch-action: none; }  /* let us handle pointer manually on touch */
