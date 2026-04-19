@@ -2541,3 +2541,48 @@ html, body {
   border-color: var(--accent-blue);
   color: var(--text-primary);
 }
+.admin-hint-inline {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Kid Mode — bigger targets/fonts on the chores page
+   ────────────────────────────────────────────────────────── */
+html[data-kid-mode="true"] .chore-item {
+  min-height: 80px;
+  padding: 18px 22px;
+  gap: 18px;
+}
+html[data-kid-mode="true"] .chore-task {
+  font-size: 28px;
+}
+html[data-kid-mode="true"] .chore-checkbox {
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  border-width: 3px;
+}
+html[data-kid-mode="true"] .chore-pts-badge,
+html[data-kid-mode="true"] .chore-streak-badge {
+  font-size: 16px;
+  padding: 4px 12px;
+}
+html[data-kid-mode="true"] .kid-name {
+  font-size: 30px;
+}
+html[data-kid-mode="true"] .kid-points-badge {
+  font-size: 18px;
+  padding: 5px 16px;
+}
+html[data-kid-mode="true"] .kid-progress-text {
+  font-size: 18px;
+}
+html[data-kid-mode="true"] .reward-name { font-size: 18px; }
+html[data-kid-mode="true"] .reward-cost { font-size: 14px; }
+html[data-kid-mode="true"] .reward-claim-btn {
+  font-size: 14px;
+  padding: 8px 16px;
+}

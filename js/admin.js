@@ -919,6 +919,17 @@ window.Admin = (() => {
       </div>
 
       <div class="admin-section">
+        <h3>Display</h3>
+        <div class="settings-grid">
+          <label>Kid mode <span class="admin-hint-inline">(bigger chores / fonts)</span></label>
+          <label class="toggle-wrap">
+            <input id="s-kid-mode" type="checkbox" ${getSavedSettings().KID_MODE ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="admin-section">
         <h3>Change PIN</h3>
         <div class="settings-grid">
           <label>New PIN (4 digits)</label>
@@ -951,12 +962,16 @@ window.Admin = (() => {
       if (!isNaN(lookahead) && lookahead >= 3) CONFIG.CALENDAR_LOOKAHEAD_DAYS = lookahead;
       CONFIG.TIME_FORMAT_24H = use24h;
 
+      const kidMode = document.getElementById('s-kid-mode')?.checked || false;
+      window.App?.applyKidMode?.(kidMode);
+
       if (newPin && /^\d{4}$/.test(newPin)) savePin(newPin);
 
       localStorage.setItem('fd_settings', JSON.stringify({
         LOCATION:               CONFIG.LOCATION,
         CALENDAR_LOOKAHEAD_DAYS: CONFIG.CALENDAR_LOOKAHEAD_DAYS,
         TIME_FORMAT_24H:        CONFIG.TIME_FORMAT_24H,
+        KID_MODE:               kidMode,
       }));
 
       const msg = document.getElementById('settings-saved-msg');

@@ -53,7 +53,14 @@ window.App = (() => {
       if (saved.LOCATION)                CONFIG.LOCATION = saved.LOCATION;
       if (saved.TIME_FORMAT_24H != null)  CONFIG.TIME_FORMAT_24H = saved.TIME_FORMAT_24H;
       if (saved.CALENDAR_LOOKAHEAD_DAYS)  CONFIG.CALENDAR_LOOKAHEAD_DAYS = saved.CALENDAR_LOOKAHEAD_DAYS;
+      applyKidMode(!!saved.KID_MODE);
     } catch {}
+  }
+
+  // Toggled from admin settings — adds data-kid-mode="true" to <html> so CSS
+  // can bump font sizes / touch targets on the chores page for younger kids.
+  function applyKidMode(on) {
+    document.documentElement.setAttribute('data-kid-mode', on ? 'true' : 'false');
   }
 
   // ── Load Page HTML ────────────────────────────────────────
@@ -343,7 +350,7 @@ window.App = (() => {
     });
   }
 
-  return { init, goTo, next, prev, toggleTheme, showUndoToast, pauseAutoAdvance };
+  return { init, goTo, next, prev, toggleTheme, showUndoToast, pauseAutoAdvance, applyKidMode };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
