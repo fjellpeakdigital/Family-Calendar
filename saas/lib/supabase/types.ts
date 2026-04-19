@@ -6,6 +6,8 @@
 export type Plan = 'free' | 'family' | 'family_plus'
 export type UserRole = 'owner' | 'member'
 export type Period = 'morning' | 'afternoon' | 'evening' | 'anytime'
+export type CalendarSourceProvider = 'google' | 'microsoft' | 'ics' | 'caldav'
+export type ReminderChannel = 'email' | 'push'
 
 export interface Database {
   public: {
@@ -41,6 +43,36 @@ export interface Database {
         Update: Partial<Omit<ChoreCompletion, 'id' | 'completed_at'>>
         Relationships: []
       }
+      event_series_overlay: {
+        Row: EventSeriesOverlay
+        Insert: Omit<EventSeriesOverlay, 'updated_at'>
+        Update: Partial<Omit<EventSeriesOverlay, 'family_id' | 'recurring_event_id'>>
+        Relationships: []
+      }
+      event_instance_overlay: {
+        Row: EventInstanceOverlay
+        Insert: Omit<EventInstanceOverlay, 'updated_at'>
+        Update: Partial<Omit<EventInstanceOverlay, 'family_id' | 'event_key'>>
+        Relationships: []
+      }
+      event_horizon: {
+        Row: EventHorizon
+        Insert: Omit<EventHorizon, 'synced_at'>
+        Update: Partial<Omit<EventHorizon, 'family_id' | 'event_key'>>
+        Relationships: []
+      }
+      reminder_sends: {
+        Row: ReminderSend
+        Insert: Omit<ReminderSend, 'sent_at'>
+        Update: never
+        Relationships: []
+      }
+      user_notification_prefs: {
+        Row: UserNotificationPrefs
+        Insert: Omit<UserNotificationPrefs, 'updated_at'>
+        Update: Partial<Omit<UserNotificationPrefs, 'user_id'>>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -68,6 +100,7 @@ export interface DbUser {
   email: string
   name: string | null
   role: UserRole
+  person_id: string | null   // links adult user to family_config.people[].id
 }
 
 export interface OAuthToken {
@@ -147,4 +180,68 @@ export interface Reward {
   name: string
   emoji: string
   points: number
+}
+
+// ── Phase 0 rows: event overlay, horizon, reminders ────────────
+
+export interface EventSeriesOverlay {
+  family_id: string
+  recurring_event_id: string
+  attendee_person_ids: string[]
+  responsible_person_ids: string[]
+  default_offset_min: number | null
+  updated_at: string
+}
+
+export interface EventInstanceOverlay {
+  family_id: string
+  event_key: string   // google event id, or '<recurringId>|<originalStart>'
+  attendee_person_ids: string[]
+  responsible_person_ids: string[]
+  offset_min: number | null
+  updated_at: string
+}
+
+export interface EventHorizon {
+  family_id: string
+  event_key: string
+  start_at: string
+  end_at: string
+  title_enc: string | null     // AES-256-GCM encrypted
+  location_enc: string | null  // AES-256-GCM encrypted
+  source_calendar_id: string
+  source_provider: CalendarSourceProvider
+  synced_at: string
+}
+
+export interface ReminderSend {
+  family_id: string
+  event_key: string
+  person_id: string
+  offset_min: number
+  channel: ReminderChannel
+  sent_at: string
+}
+
+export interface QuietHours {
+  start: string  // 'HH:mm'
+  end: string
+}
+
+export interface PushSubscriptionRecord {
+  endpoint: string
+  p256dh: string
+  auth: string
+  user_agent: string | null
+  created_at: string
+}
+
+export interface UserNotificationPrefs {
+  user_id: string
+  email_enabled: boolean
+  push_enabled: boolean
+  push_endpoints: PushSubscriptionRecord[]
+  quiet_hours: QuietHours | null
+  default_offsets: number[]   // minutes before event
+  updated_at: string
 }
