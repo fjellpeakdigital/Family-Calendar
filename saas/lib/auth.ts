@@ -73,7 +73,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await supabase.from('oauth_tokens').upsert(
           {
             family_id: familyId,
-            google_account_email: user.email,
+            provider: 'google',
+            account_email: user.email,
             access_token_enc: encryptedAccess,
             refresh_token_enc: encryptedRefresh,
             expires_at: account.expires_at
@@ -81,7 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               : null,
             scopes: account.scope ?? null,
           },
-          { onConflict: 'family_id,google_account_email' }
+          { onConflict: 'family_id,provider,account_email' }
         )
       }
 

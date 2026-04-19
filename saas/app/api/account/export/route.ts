@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       .order('completed_date', { ascending: false }),
     supabase
       .from('oauth_tokens')
-      .select('google_account_email, expires_at, scopes, created_at')
+      .select('provider, account_email, expires_at, scopes, created_at')
       .eq('family_id', user.family_id),
   ])
 
@@ -57,7 +57,8 @@ export async function GET(req: NextRequest) {
     config: configResult.data?.config_json ?? null,
     choreHistory: completionsResult.data ?? [],
     connectedAccounts: (tokensResult.data ?? []).map(t => ({
-      email:     t.google_account_email,
+      provider:  t.provider ?? 'google',
+      email:     t.account_email,
       // Never export token values
       scopes:    t.scopes,
       connectedAt: t.created_at,

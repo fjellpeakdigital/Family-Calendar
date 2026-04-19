@@ -35,18 +35,20 @@ create index users_family_id_idx on users(family_id);
 -- ── oauth_tokens ───────────────────────────────────────────────
 -- Tokens are AES-256-GCM encrypted at the application layer
 -- before being stored here. Even a DB breach yields no usable tokens.
+-- Multi-provider: the same family can connect google + microsoft + ...
 create table oauth_tokens (
   id                    uuid primary key default gen_random_uuid(),
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   family_id             uuid not null references families(id) on delete cascade,
-  google_account_email  text not null,
+  provider              text not null default 'google',
+  account_email         text not null,
   access_token_enc      text not null,       -- AES-256-GCM encrypted
   refresh_token_enc     text,                -- AES-256-GCM encrypted
   expires_at            timestamptz,
   scopes                text,
 
-  unique (family_id, google_account_email)
+  unique (family_id, provider, account_email)
 );
 
 create index oauth_tokens_family_id_idx on oauth_tokens(family_id);

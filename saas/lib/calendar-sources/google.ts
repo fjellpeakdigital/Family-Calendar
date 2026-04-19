@@ -32,7 +32,7 @@ async function getAccessToken(tok: OAuthToken): Promise<string> {
   if (!isExpired) return decryptToken(tok.access_token_enc)
 
   if (!tok.refresh_token_enc) {
-    throw new Error(`No refresh token for account ${tok.google_account_email}`)
+    throw new Error(`No refresh token for account ${tok.account_email}`)
   }
 
   const refreshToken = decryptToken(tok.refresh_token_enc)
@@ -49,7 +49,7 @@ async function getAccessToken(tok: OAuthToken): Promise<string> {
 
   if (!resp.ok) {
     const err = await resp.text()
-    throw new Error(`Token refresh failed for ${tok.google_account_email}: ${err}`)
+    throw new Error(`Token refresh failed for ${tok.account_email}: ${err}`)
   }
 
   const data = await resp.json()
@@ -109,7 +109,8 @@ export const googleAdapter: CalendarSourceAdapter = {
       .from('oauth_tokens')
       .select('*')
       .eq('family_id', ctx.familyId)
-      .eq('google_account_email', accountEmail)
+      .eq('provider', 'google')
+      .eq('account_email', accountEmail)
       .maybeSingle()
 
     if (!tok) return []

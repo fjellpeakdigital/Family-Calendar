@@ -28,12 +28,13 @@ export async function GET(req: NextRequest) {
 
   const { data: tokens } = await supabase
     .from('oauth_tokens')
-    .select('google_account_email, expires_at, scopes')
+    .select('provider, account_email, expires_at, scopes')
     .eq('family_id', user.family_id)
 
   return NextResponse.json({
     accounts: (tokens ?? []).map(t => ({
-      email:     t.google_account_email,
+      provider:  t.provider ?? 'google',
+      email:     t.account_email,
       expiresAt: t.expires_at,
       scopes:    t.scopes,
     })),
@@ -41,8 +42,10 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * DELETE /api/account/connected?email=someone@gmail.com
- * Disconnects a Google account and removes its encrypted tokens.
+ * DELETE /api/account/connected?email=someone@gmail.com&provider=google
+ * Disconnects a calendar account and removes its encrypted tokens.
+ * `provider` defaults to 'google' for backwards compatibility with
+ * callers that predate multi-provider support.
  */
 export async function DELETE(req: NextRequest) {
   const limited = await rateLimit(req)
@@ -57,6 +60,7 @@ export async function DELETE(req: NextRequest) {
   if (!accountEmail) {
     return NextResponse.json({ error: 'email param required' }, { status: 400 })
   }
+  const provider = req.nextUrl.searchParams.get('provider') ?? 'google'
 
   const supabase = await createClient()
 
@@ -72,7 +76,8 @@ export async function DELETE(req: NextRequest) {
     .from('oauth_tokens')
     .delete()
     .eq('family_id', user.family_id)
-    .eq('google_account_email', accountEmail)
+    .eq('provider', provider)
+    .eq('account_email', accountEmail)
 
   return NextResponse.json({ ok: true })
 }

@@ -130,7 +130,8 @@ export interface OAuthToken {
   created_at: string
   updated_at: string
   family_id: string
-  google_account_email: string
+  provider: CalendarSourceProvider
+  account_email: string
   access_token_enc: string
   refresh_token_enc: string | null
   expires_at: string | null

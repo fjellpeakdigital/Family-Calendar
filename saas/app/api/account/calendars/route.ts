@@ -38,7 +38,8 @@ export async function GET(req: NextRequest) {
     .from('oauth_tokens')
     .select('access_token_enc, expires_at, refresh_token_enc, id')
     .eq('family_id', user.family_id)
-    .eq('google_account_email', accountEmail)
+    .eq('provider', 'google')
+    .eq('account_email', accountEmail)
     .single()
 
   if (!tok) {
