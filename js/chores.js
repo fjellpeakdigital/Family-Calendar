@@ -41,6 +41,33 @@ window.Chores = (() => {
     } catch { return []; }
   }
 
+  // ── Bonus Chores (one-off for a specific date) ────────────
+  // fd_bonus_chores: { "kidId": [{id, task, points, forDate:'YYYY-MM-DD'}] }
+  function getBonusChoresRaw() {
+    try { return JSON.parse(localStorage.getItem('fd_bonus_chores') || '{}'); }
+    catch { return {}; }
+  }
+
+  function saveBonusChoresRaw(obj) {
+    localStorage.setItem('fd_bonus_chores', JSON.stringify(obj));
+  }
+
+  // Prune bonus chores whose forDate is in the past, then return today's bonus
+  // chores for one kid.
+  function getKidBonusChoresForToday(kidId) {
+    const all = getBonusChoresRaw();
+    const today = todayDateStr();
+    let pruned = false;
+    Object.keys(all).forEach(kid => {
+      const kept = (all[kid] || []).filter(c => (c.forDate || '') >= today);
+      if (kept.length !== (all[kid] || []).length) pruned = true;
+      all[kid] = kept;
+    });
+    if (pruned) saveBonusChoresRaw(all);
+    return (all[kidId] || []).filter(c => c.forDate === today)
+      .map(c => ({ ...c, bonus: true, days: [DAY_SHORT[new Date().getDay()]], period: 'anytime' }));
+  }
+
   // ── Points Storage ────────────────────────────────────────
   function getPoints() {
     try { return JSON.parse(localStorage.getItem('fd_points')) || {}; }
@@ -168,13 +195,21 @@ window.Chores = (() => {
   const PERIOD_ORDER = ['morning', 'afternoon', 'evening', 'anytime'];
   function todayChores(kidId) {
     const dayName = DAY_SHORT[new Date().getDay()];
-    return getKidChores(kidId)
-      .filter(c => c.days.includes(dayName))
-      .sort((a, b) => {
-        const ai = PERIOD_ORDER.indexOf(a.period || 'anytime');
-        const bi = PERIOD_ORDER.indexOf(b.period || 'anytime');
-        return ai - bi;
-      });
+    const regular = getKidChores(kidId).filter(c => c.days.includes(dayName));
+    const bonus   = getKidBonusChoresForToday(kidId);
+    return [...regular, ...bonus].sort((a, b) => {
+      const ai = PERIOD_ORDER.indexOf(a.period || 'anytime');
+      const bi = PERIOD_ORDER.indexOf(b.period || 'anytime');
+      return ai - bi;
+    });
+  }
+
+  // Lookup a chore (regular or bonus) for toggle / undo.
+  function findChoreForKid(kidId, choreId) {
+    const regular = getKidChores(kidId).find(c => c.id === choreId);
+    if (regular) return regular;
+    const bonus = getKidBonusChoresForToday(kidId).find(c => c.id === choreId);
+    return bonus || null;
   }
 
   // ── Confetti ───────────────────────────────────────────────
@@ -279,6 +314,65 @@ window.Chores = (() => {
     renderChores();
   }
 
+  // ── Weekly rollup (7-day completion dots) ─────────────────
+  // Returns { date, dayLabel, pct, done, total } for each of the last 7 days
+  // ending with today. `pct` is null when no chores were due that day.
+  function computeWeeklyRollup(kidId) {
+    const kidChores = getKidChores(kidId);
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setHours(0,0,0,0);
+      d.setDate(d.getDate() - i);
+      const dateKey = dateStr(d);
+      const dayName = DAY_SHORT[d.getDay()];
+      const due = kidChores.filter(c => c.days.includes(dayName));
+      if (due.length === 0) {
+        result.push({ date: dateKey, dayLabel: dayName, pct: null, done: 0, total: 0 });
+        continue;
+      }
+      let state = {};
+      try { state = JSON.parse(localStorage.getItem(`fd_chore_${dateKey}`)) || {}; }
+      catch {}
+      const done = due.filter(c => state[choreKey(kidId, c.id)]).length;
+      result.push({
+        date: dateKey, dayLabel: dayName,
+        pct: Math.round(done / due.length * 100),
+        done, total: due.length,
+      });
+    }
+    return result;
+  }
+
+  function renderWeeklyRollup(kid) {
+    const rollup = computeWeeklyRollup(kid.id);
+    if (rollup.every(r => r.pct === null)) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'weekly-rollup';
+    rollup.forEach((r, i) => {
+      const isToday = i === rollup.length - 1;
+      const cell = document.createElement('div');
+      cell.className = `weekly-rollup-cell${isToday ? ' today' : ''}`;
+      if (r.pct === null) {
+        cell.classList.add('none-due');
+        cell.title = `${r.dayLabel}: no chores`;
+      } else {
+        if (r.pct === 100)      cell.classList.add('full');
+        else if (r.pct >= 50)   cell.classList.add('most');
+        else if (r.pct > 0)     cell.classList.add('some');
+        else                    cell.classList.add('zero');
+        cell.title = `${r.dayLabel}: ${r.done}/${r.total}`;
+      }
+      cell.innerHTML = `
+        <span class="weekly-rollup-dot" style="${r.pct !== null && r.pct > 0 ? `background:${escapeHtml(kid.color || 'var(--accent-blue)')}` : ''}"></span>
+        <span class="weekly-rollup-label">${r.dayLabel[0]}</span>
+      `;
+      wrap.appendChild(cell);
+    });
+    return wrap;
+  }
+
   // ── Render one kid column ─────────────────────────────────
   function renderKidColumn(kid, state) {
     const chores    = todayChores(kid.id);
@@ -302,6 +396,9 @@ window.Chores = (() => {
       </div>
     `;
     col.appendChild(header);
+
+    const rollup = renderWeeklyRollup(kid);
+    if (rollup) col.appendChild(rollup);
 
     const list = document.createElement('div');
     list.className = 'chore-list';
@@ -339,7 +436,7 @@ window.Chores = (() => {
 
         item.innerHTML = `
           <div class="chore-checkbox">${done ? '✓' : ''}</div>
-          <div class="chore-task">${escapeHtml(chore.task)}</div>
+          <div class="chore-task">${escapeHtml(chore.task)}${chore.bonus ? ' <span class="chore-bonus-tag" title="One-off bonus chore">BONUS</span>' : ''}</div>
           ${streakCount >= 2 ? `<div class="chore-streak-badge" title="${streakCount}-day streak">🔥 ${streakCount}</div>` : ''}
           ${pts > 0 ? `<div class="chore-pts-badge${done ? ' earned' : ''}">⭐ ${pts}</div>` : ''}
         `;
@@ -376,8 +473,7 @@ window.Chores = (() => {
     state[key]   = !wasDone;
     saveState(state);
 
-    const chores = getKidChores(kidId);
-    const chore  = chores.find(c => c.id === choreId);
+    const chore  = findChoreForKid(kidId, choreId);
     const choreTask = chore?.task || 'Chore';
     const cPts = chore?.points || 0;
 
@@ -388,8 +484,9 @@ window.Chores = (() => {
       savePoints(pts);
     }
 
-    // Update streak on this chore
-    if (chore) {
+    // Update streak on this chore — skip bonus (one-off) chores so they
+    // don't pollute the streak table with single-day entries.
+    if (chore && !chore.bonus) {
       if (!wasDone) bumpStreak(kidId, chore);
       else          decrementStreak(kidId, chore);
     }
@@ -502,5 +599,32 @@ window.Chores = (() => {
     host.appendChild(grid);
   }
 
-  return { render, renderTodayStrip, startMidnightReset };
+  // ── Admin API: bonus chores ───────────────────────────────
+  function addBonusChore(kidId, { task, points = 1 }) {
+    const all = getBonusChoresRaw();
+    if (!all[kidId]) all[kidId] = [];
+    all[kidId].push({
+      id: crypto.randomUUID(),
+      task,
+      points: Math.max(1, parseInt(points, 10) || 1),
+      forDate: todayDateStr(),
+    });
+    saveBonusChoresRaw(all);
+  }
+
+  function listBonusChoresForToday(kidId) {
+    return getKidBonusChoresForToday(kidId);
+  }
+
+  function removeBonusChore(kidId, choreId) {
+    const all = getBonusChoresRaw();
+    if (!all[kidId]) return;
+    all[kidId] = all[kidId].filter(c => c.id !== choreId);
+    saveBonusChoresRaw(all);
+  }
+
+  return {
+    render, renderTodayStrip, startMidnightReset,
+    addBonusChore, listBonusChoresForToday, removeBonusChore,
+  };
 })();

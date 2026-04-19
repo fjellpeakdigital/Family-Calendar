@@ -480,12 +480,15 @@ window.Admin = (() => {
 
     kids.forEach(kid => {
       const chores = choreData[kid.id] || [];
+      const otherKids = kids.filter(k => k.id !== kid.id);
       const section = document.createElement('div');
       section.className = 'admin-section';
       section.innerHTML = `
         <div class="admin-section-header">
           <h3 style="color:${escapeHtml(kid.color)}">${escapeHtml(kid.emoji || '🧒')} ${escapeHtml(kid.name)}</h3>
+          <button class="btn btn-sm btn-outline add-bonus-btn" data-kid="${escapeHtml(kid.id)}">+ Bonus Today</button>
         </div>
+        <div class="bonus-admin-list" id="bonus-${escapeHtml(kid.id)}"></div>
         <div class="chore-admin-list" id="chores-${escapeHtml(kid.id)}"></div>
         <div class="add-chore-form">
           <input type="text" class="admin-input" id="new-task-${escapeHtml(kid.id)}" placeholder="New chore…" />
@@ -512,6 +515,16 @@ window.Admin = (() => {
             <input type="number" class="admin-input points-custom-input"
                    id="new-pts-${escapeHtml(kid.id)}" min="1" max="100" value="1" />
           </div>
+          ${otherKids.length > 0 ? `
+          <div class="copy-to-row">
+            <span class="period-label-hint">Also add to:</span>
+            ${otherKids.map(k => `
+              <label class="copy-to-chip">
+                <input type="checkbox" class="copy-to-check" data-kid-id="${escapeHtml(k.id)}" />
+                <span>${escapeHtml(k.emoji || '🧒')} ${escapeHtml(k.name)}</span>
+              </label>
+            `).join('')}
+          </div>` : ''}
           <button class="btn btn-sm btn-primary add-chore-btn" data-kid="${escapeHtml(kid.id)}">Add Chore</button>
         </div>
 
@@ -522,6 +535,8 @@ window.Admin = (() => {
         <div class="rewards-admin-list" id="rewards-${escapeHtml(kid.id)}"></div>
       `;
       el.appendChild(section);
+
+      renderBonusList(document.getElementById(`bonus-${kid.id}`), kid);
 
       renderChoreList(document.getElementById(`chores-${kid.id}`), kid, chores);
       renderRewardList(document.getElementById(`rewards-${kid.id}`), kid);
@@ -554,7 +569,7 @@ window.Admin = (() => {
         );
       });
 
-      // Add chore button
+      // Add chore button (with copy-to-kid)
       section.querySelector('.add-chore-btn').addEventListener('click', () => {
         const taskInput = document.getElementById(`new-task-${kid.id}`);
         const task = taskInput.value.trim();
@@ -563,22 +578,107 @@ window.Admin = (() => {
         if (selectedDays.length === 0) return;
         const period = section.querySelector('.period-btn.selected')?.dataset.period || 'anytime';
         const points = Math.max(1, parseInt(ptsInput.value, 10) || 1);
+        const copyTargets = [...section.querySelectorAll('.copy-to-check:checked')].map(cb => cb.dataset.kidId);
 
         const cd = getChoreData();
-        if (!cd[kid.id]) cd[kid.id] = [];
-        cd[kid.id].push({ id: crypto.randomUUID(), task, days: selectedDays, period, points });
+        const targetKidIds = [kid.id, ...copyTargets];
+        targetKidIds.forEach(tid => {
+          if (!cd[tid]) cd[tid] = [];
+          cd[tid].push({ id: crypto.randomUUID(), task, days: selectedDays, period, points });
+        });
         saveChoreData(cd);
+
         taskInput.value = '';
         ptsInput.value = '1';
         section.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('selected', b.dataset.period === 'anytime'));
         section.querySelectorAll('.points-preset').forEach(b => b.classList.toggle('selected', b.dataset.pts === '1'));
+        section.querySelectorAll('.copy-to-check').forEach(cb => { cb.checked = false; });
         renderChoreList(document.getElementById(`chores-${kid.id}`), kid, cd[kid.id]);
+      });
+
+      // Add bonus (one-off today) button
+      section.querySelector('.add-bonus-btn').addEventListener('click', () => {
+        showBonusForm(kid, section);
       });
 
       // Add reward button
       section.querySelector('.add-reward-btn').addEventListener('click', () => {
         showRewardForm(kid, document.getElementById(`rewards-${kid.id}`));
       });
+    });
+  }
+
+  function renderBonusList(container, kid) {
+    if (!container) return;
+    const bonuses = window.Chores?.listBonusChoresForToday?.(kid.id) || [];
+    container.innerHTML = '';
+    if (bonuses.length === 0) return;
+    bonuses.forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'chore-admin-row bonus-row';
+      row.innerHTML = `
+        <span class="chore-bonus-tag">BONUS</span>
+        <span class="chore-task-name">${escapeHtml(b.task)}</span>
+        <span class="chore-pts-tag">⭐ ${b.points} pt${b.points !== 1 ? 's' : ''}</span>
+        <span class="chore-days">today only</span>
+        <button class="btn btn-sm btn-danger" data-remove-bonus="${escapeHtml(b.id)}" aria-label="Delete bonus">✕</button>
+      `;
+      row.querySelector('[data-remove-bonus]').addEventListener('click', () => {
+        window.Chores?.removeBonusChore?.(kid.id, b.id);
+        renderBonusList(container, kid);
+      });
+      container.appendChild(row);
+    });
+  }
+
+  function showBonusForm(kid, section) {
+    const existing = section.querySelector('.bonus-add-form');
+    if (existing) { existing.remove(); return; }
+
+    const form = document.createElement('div');
+    form.className = 'add-chore-form bonus-add-form';
+    form.innerHTML = `
+      <input type="text" class="admin-input bf-task" placeholder="One-off chore for today…" />
+      <div class="chore-points-row">
+        <span class="period-label-hint">Points:</span>
+        <div class="points-preset-btns">
+          <button class="points-preset selected" data-pts="1">1</button>
+          <button class="points-preset" data-pts="2">2</button>
+          <button class="points-preset" data-pts="5">5</button>
+          <button class="points-preset" data-pts="10">10</button>
+        </div>
+        <input type="number" class="admin-input points-custom-input bf-pts" min="1" max="100" value="1" />
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-sm btn-outline bf-cancel">Cancel</button>
+        <button class="btn btn-sm btn-primary bf-save">Add for Today</button>
+      </div>
+    `;
+    const bonusList = section.querySelector('.bonus-admin-list');
+    bonusList.after(form);
+
+    const ptsInput = form.querySelector('.bf-pts');
+    form.querySelectorAll('.points-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        form.querySelectorAll('.points-preset').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        ptsInput.value = btn.dataset.pts;
+      });
+    });
+    ptsInput.addEventListener('input', () => {
+      form.querySelectorAll('.points-preset').forEach(b =>
+        b.classList.toggle('selected', b.dataset.pts === ptsInput.value)
+      );
+    });
+
+    form.querySelector('.bf-cancel').addEventListener('click', () => form.remove());
+    form.querySelector('.bf-save').addEventListener('click', () => {
+      const task = form.querySelector('.bf-task').value.trim();
+      if (!task) return;
+      const points = Math.max(1, parseInt(ptsInput.value, 10) || 1);
+      window.Chores?.addBonusChore?.(kid.id, { task, points });
+      form.remove();
+      renderBonusList(section.querySelector('.bonus-admin-list'), kid);
     });
   }
 
