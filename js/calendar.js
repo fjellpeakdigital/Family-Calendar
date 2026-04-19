@@ -79,10 +79,42 @@ window.Calendar = (() => {
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
+  // ── Per-person filter (localStorage-backed) ────────────────
+  function _getHiddenPeople() {
+    try { return JSON.parse(localStorage.getItem('fd_cal_hidden_people')) || []; }
+    catch { return []; }
+  }
+  function _setHiddenPeople(arr) {
+    localStorage.setItem('fd_cal_hidden_people', JSON.stringify(arr));
+  }
+  function togglePersonFilter(personId) {
+    const hidden = new Set(_getHiddenPeople());
+    if (hidden.has(personId)) hidden.delete(personId);
+    else hidden.add(personId);
+    _setHiddenPeople([...hidden]);
+    render();
+    if (document.getElementById('today-events-panel')) renderTodayPanel();
+  }
+  function clearPersonFilter() {
+    _setHiddenPeople([]);
+    render();
+    if (document.getElementById('today-events-panel')) renderTodayPanel();
+  }
+
   function eventsForDay(dateObj) {
     const ds = toLocalDateStr(dateObj);
+    const hidden = new Set(_getHiddenPeople());
+    const people = _getPeople();
+    // Build owner-name → personId lookup so we can filter by id even though
+    // events only carry the owner display name.
+    const nameToId = {};
+    people.forEach(p => { nameToId[p.name] = p.id; });
     return Object.values(_cache).flat()
       .filter(ev => toLocalDateStr(ev.start) === ds)
+      .filter(ev => {
+        const pid = nameToId[ev.owner];
+        return !pid || !hidden.has(pid);
+      })
       .sort((a,b) => {
         if (a.allDay && !b.allDay) return -1;
         if (!a.allDay && b.allDay) return 1;
@@ -536,10 +568,48 @@ window.Calendar = (() => {
     if (overlay) overlay.classList.remove('visible');
   }
 
+  // ── Filter chip row ───────────────────────────────────────
+  function renderFilterChips() {
+    const host = document.getElementById('cal-filter-chips');
+    if (!host) return;
+    // Only show owners that actually have events assigned to them
+    const people = _getPeople();
+    const assignments = _getAssignments();
+    const assignedIds = new Set(assignments.map(a => a.personId));
+    const shown = people.filter(p => assignedIds.has(p.id));
+    if (shown.length <= 1) { host.innerHTML = ''; host.style.display = 'none'; return; }
+
+    const hidden = new Set(_getHiddenPeople());
+    host.style.display = '';
+    host.innerHTML = '';
+    shown.forEach(p => {
+      const chip = document.createElement('button');
+      const isOff = hidden.has(p.id);
+      chip.className = `cal-filter-chip${isOff ? ' off' : ''}`;
+      chip.style.setProperty('--chip-color', p.color || '#888');
+      chip.innerHTML = `
+        <span class="cal-filter-dot" style="background:${escapeHtml(p.color || '#888')}"></span>
+        <span class="cal-filter-name">${escapeHtml(p.name)}</span>
+      `;
+      chip.addEventListener('click', () => togglePersonFilter(p.id));
+      host.appendChild(chip);
+    });
+
+    if (hidden.size > 0) {
+      const all = document.createElement('button');
+      all.className = 'cal-filter-chip cal-filter-all';
+      all.textContent = 'Show all';
+      all.addEventListener('click', clearPersonFilter);
+      host.appendChild(all);
+    }
+  }
+
   // ── Public render ──────────────────────────────────────────
   async function render(force = false) {
     const container = document.getElementById('cal-view-container');
     if (!container) return;
+
+    renderFilterChips();
 
     container.innerHTML = '<div class="loading-wrap"><div class="spinner"></div><span>Loading…</span></div>';
     await fetchAll(force);
@@ -631,5 +701,5 @@ window.Calendar = (() => {
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  return { render, renderTodayPanel, navigate, goToToday, setView, startAutoRefresh, closeModal };
+  return { render, renderTodayPanel, navigate, goToToday, setView, startAutoRefresh, closeModal, togglePersonFilter, clearPersonFilter };
 })();

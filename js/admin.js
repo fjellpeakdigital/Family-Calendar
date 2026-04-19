@@ -589,24 +589,121 @@ window.Admin = (() => {
       return;
     }
     chores.forEach(chore => {
-      const row = document.createElement('div');
-      row.className = 'chore-admin-row';
-      const periodLabel = { morning: '🌅 Morning', afternoon: '☀️ Afternoon', evening: '🌙 Evening' }[chore.period] || '';
-      const pts = chore.points || 1;
-      row.innerHTML = `
-        <span class="chore-task-name">${escapeHtml(chore.task)}</span>
-        ${periodLabel ? `<span class="chore-period-tag">${periodLabel}</span>` : ''}
-        <span class="chore-pts-tag">⭐ ${pts}pt${pts !== 1 ? 's' : ''}</span>
-        <span class="chore-days">${escapeHtml(chore.days.join(', '))}</span>
-        <button class="btn btn-sm btn-danger" data-remove-chore="${escapeHtml(chore.id)}">✕</button>
-      `;
-      row.querySelector('[data-remove-chore]').addEventListener('click', () => {
-        const cd = getChoreData();
-        cd[kid.id] = (cd[kid.id] || []).filter(c => c.id !== chore.id);
-        saveChoreData(cd);
-        renderChoreList(container, kid, getChoreData()[kid.id] || []);
-      });
+      const row = buildChoreRow(container, kid, chore);
       container.appendChild(row);
+    });
+  }
+
+  function buildChoreRow(container, kid, chore) {
+    const row = document.createElement('div');
+    row.className = 'chore-admin-row';
+    const periodLabel = { morning: '🌅 Morning', afternoon: '☀️ Afternoon', evening: '🌙 Evening' }[chore.period] || '';
+    const pts = chore.points || 1;
+    row.innerHTML = `
+      <span class="chore-task-name">${escapeHtml(chore.task)}</span>
+      ${periodLabel ? `<span class="chore-period-tag">${periodLabel}</span>` : ''}
+      <span class="chore-pts-tag">⭐ ${pts}pt${pts !== 1 ? 's' : ''}</span>
+      <span class="chore-days">${escapeHtml(chore.days.join(', '))}</span>
+      <button class="btn btn-sm btn-outline" data-edit-chore="${escapeHtml(chore.id)}" aria-label="Edit chore">✎</button>
+      <button class="btn btn-sm btn-danger"  data-remove-chore="${escapeHtml(chore.id)}" aria-label="Delete chore">✕</button>
+    `;
+    row.querySelector('[data-edit-chore]').addEventListener('click', () => {
+      showChoreEditForm(row, container, kid, chore);
+    });
+    row.querySelector('[data-remove-chore]').addEventListener('click', () => {
+      const cd = getChoreData();
+      cd[kid.id] = (cd[kid.id] || []).filter(c => c.id !== chore.id);
+      saveChoreData(cd);
+      renderChoreList(container, kid, getChoreData()[kid.id] || []);
+    });
+    return row;
+  }
+
+  function showChoreEditForm(row, container, kid, chore) {
+    const existing = container.querySelector('.chore-edit-form');
+    if (existing) existing.remove();
+
+    const form = document.createElement('div');
+    form.className = 'add-chore-form chore-edit-form';
+    const periodVal = chore.period || 'anytime';
+    const ptsVal    = chore.points || 1;
+    form.innerHTML = `
+      <input type="text" class="admin-input ef-task" value="${escapeHtml(chore.task)}" placeholder="Chore name…" />
+      <div class="day-toggles ef-days">
+        ${ALL_DAYS.map(d => `
+          <button class="day-btn${chore.days.includes(d) ? ' selected' : ''}" data-day="${d}">${d}</button>
+        `).join('')}
+      </div>
+      <div class="period-toggles ef-periods">
+        <span class="period-label-hint">Time of day:</span>
+        ${['anytime','morning','afternoon','evening'].map(p => `
+          <button class="period-btn${p === periodVal ? ' selected' : ''}" data-period="${p}">
+            ${p === 'anytime' ? 'Any time' : p.charAt(0).toUpperCase() + p.slice(1)}
+          </button>
+        `).join('')}
+      </div>
+      <div class="chore-points-row">
+        <span class="period-label-hint">Points:</span>
+        <div class="points-preset-btns">
+          ${[1,2,5,10].map(n => `
+            <button class="points-preset${n === ptsVal ? ' selected' : ''}" data-pts="${n}">${n}</button>
+          `).join('')}
+        </div>
+        <input type="number" class="admin-input points-custom-input ef-pts" min="1" max="100" value="${ptsVal}" />
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-sm btn-outline ef-cancel">Cancel</button>
+        <button class="btn btn-sm btn-primary ef-save">Save</button>
+      </div>
+    `;
+    row.after(form);
+    row.style.display = 'none';
+
+    form.querySelectorAll('.day-btn').forEach(btn => {
+      btn.addEventListener('click', () => btn.classList.toggle('selected'));
+    });
+
+    form.querySelectorAll('.period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        form.querySelectorAll('.period-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+
+    const ptsInput = form.querySelector('.ef-pts');
+    form.querySelectorAll('.points-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        form.querySelectorAll('.points-preset').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        ptsInput.value = btn.dataset.pts;
+      });
+    });
+    ptsInput.addEventListener('input', () => {
+      form.querySelectorAll('.points-preset').forEach(b =>
+        b.classList.toggle('selected', b.dataset.pts === ptsInput.value)
+      );
+    });
+
+    form.querySelector('.ef-cancel').addEventListener('click', () => {
+      form.remove();
+      row.style.display = '';
+    });
+
+    form.querySelector('.ef-save').addEventListener('click', () => {
+      const task = form.querySelector('.ef-task').value.trim();
+      if (!task) return;
+      const days = [...form.querySelectorAll('.day-btn.selected')].map(b => b.dataset.day);
+      if (days.length === 0) return;
+      const period = form.querySelector('.period-btn.selected')?.dataset.period || 'anytime';
+      const points = Math.max(1, parseInt(ptsInput.value, 10) || 1);
+
+      const cd = getChoreData();
+      const list = cd[kid.id] || [];
+      const idx = list.findIndex(c => c.id === chore.id);
+      if (idx >= 0) list[idx] = { ...list[idx], task, days, period, points };
+      cd[kid.id] = list;
+      saveChoreData(cd);
+      renderChoreList(container, kid, list);
     });
   }
 

@@ -7,6 +7,8 @@ window.App = (() => {
   let _pageCount    = 0;
   let _autoTimer    = null;
   let _renderedPages = new Set();
+  let _autoPausedUntil = 0;   // ms timestamp; auto-advance skips ticks until this time
+  const AUTO_PAUSE_MS = 60_000;
 
   // ── One-time migration: seed fd_people / fd_chore_data ───
   // Runs on first boot from CONFIG.CALENDAR_OWNERS + CONFIG.KIDS.
@@ -130,6 +132,7 @@ window.App = (() => {
       case 'today':
         Calendar.renderTodayPanel();
         Weather.renderTodayPanel();
+        Chores.renderTodayStrip();
         break;
       case 'chores': Chores.render(); break;
       case 'weather': Weather.render(); break;
@@ -203,7 +206,61 @@ window.App = (() => {
   // ── Auto-Advance ──────────────────────────────────────────
   function startAutoAdvance() {
     if (!CONFIG.AUTO_ADVANCE_PAGES) return;
-    _autoTimer = setInterval(() => next(), CONFIG.AUTO_ADVANCE_INTERVAL_MS);
+    _autoTimer = setInterval(() => {
+      if (Date.now() < _autoPausedUntil) return;
+      next();
+    }, CONFIG.AUTO_ADVANCE_INTERVAL_MS);
+  }
+
+  function pauseAutoAdvance(ms = AUTO_PAUSE_MS) {
+    _autoPausedUntil = Date.now() + ms;
+  }
+
+  function initAutoPause() {
+    if (!CONFIG.AUTO_ADVANCE_PAGES) return;
+    const bump = () => pauseAutoAdvance();
+    document.addEventListener('touchstart', bump, { passive: true });
+    document.addEventListener('mousedown',  bump);
+    document.addEventListener('keydown',    bump);
+    document.addEventListener('wheel',      bump, { passive: true });
+  }
+
+  // ── Undo Toast ────────────────────────────────────────────
+  // Shows a bottom-screen toast with an Undo button.
+  // Calling again while one is visible dismisses the prior toast.
+  let _toastEl = null, _toastTimer = null;
+
+  function showUndoToast(message, onUndo, durationMs = 7000) {
+    pauseAutoAdvance(Math.max(durationMs + 2000, AUTO_PAUSE_MS));
+    dismissToast();
+
+    const toast = document.createElement('div');
+    toast.className = 'undo-toast';
+    toast.innerHTML = `
+      <span class="undo-toast-msg"></span>
+      <button class="undo-toast-btn" type="button">Undo</button>
+    `;
+    toast.querySelector('.undo-toast-msg').textContent = message;
+    toast.querySelector('.undo-toast-btn').addEventListener('click', () => {
+      try { onUndo?.(); } finally { dismissToast(); }
+    });
+
+    document.body.appendChild(toast);
+    // Force reflow so the transition runs
+    void toast.offsetWidth;
+    toast.classList.add('visible');
+
+    _toastEl = toast;
+    _toastTimer = setTimeout(dismissToast, durationMs);
+  }
+
+  function dismissToast() {
+    if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+    if (!_toastEl) return;
+    const el = _toastEl;
+    _toastEl = null;
+    el.classList.remove('visible');
+    setTimeout(() => el.remove(), 250);
   }
 
   // ── Fullscreen ────────────────────────────────────────────
@@ -274,6 +331,7 @@ window.App = (() => {
     initSwipe();
     initKeyboard();
     startAutoAdvance();
+    initAutoPause();
     requestFullscreenOnce();
 
     Calendar.startAutoRefresh();
@@ -285,7 +343,7 @@ window.App = (() => {
     });
   }
 
-  return { init, goTo, next, prev, toggleTheme };
+  return { init, goTo, next, prev, toggleTheme, showUndoToast, pauseAutoAdvance };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {

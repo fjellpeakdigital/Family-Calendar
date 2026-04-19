@@ -65,6 +65,77 @@ window.Chores = (() => {
     localStorage.setItem('fd_rewards', JSON.stringify(obj));
   }
 
+  // ── Streak Storage ────────────────────────────────────────
+  // fd_streaks: { "kidId__choreId": { count, lastDate } }
+  function getStreaks() {
+    try { return JSON.parse(localStorage.getItem('fd_streaks')) || {}; }
+    catch { return {}; }
+  }
+
+  function saveStreaks(obj) {
+    localStorage.setItem('fd_streaks', JSON.stringify(obj));
+  }
+
+  function dateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function todayDateStr() { return dateStr(new Date()); }
+
+  // Previous scheduled day (YYYY-MM-DD) for a chore, walking back up to 7 days
+  function prevScheduledDay(choreDays, fromDateStr) {
+    const from = new Date(fromDateStr + 'T00:00:00');
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(from);
+      d.setDate(d.getDate() - i);
+      if (choreDays.includes(DAY_SHORT[d.getDay()])) return dateStr(d);
+    }
+    return null;
+  }
+
+  // Returns the current live streak count for a chore, lazily resetting
+  // if the last-done date isn't today or the previous scheduled day.
+  function getChoreStreak(kidId, chore) {
+    const streaks = getStreaks();
+    const key = `${kidId}__${chore.id}`;
+    const entry = streaks[key];
+    if (!entry || !entry.count) return 0;
+    const today = todayDateStr();
+    if (entry.lastDate === today) return entry.count;
+    if (entry.lastDate === prevScheduledDay(chore.days, today)) return entry.count;
+    delete streaks[key];
+    saveStreaks(streaks);
+    return 0;
+  }
+
+  function bumpStreak(kidId, chore) {
+    const streaks = getStreaks();
+    const key = `${kidId}__${chore.id}`;
+    const today = todayDateStr();
+    const entry = streaks[key] || { count: 0, lastDate: '' };
+    if (entry.lastDate === today) return; // already counted today
+    const prevSched = prevScheduledDay(chore.days, today);
+    const newCount = entry.lastDate === prevSched ? entry.count + 1 : 1;
+    streaks[key] = { count: newCount, lastDate: today };
+    saveStreaks(streaks);
+  }
+
+  function decrementStreak(kidId, chore) {
+    const streaks = getStreaks();
+    const key = `${kidId}__${chore.id}`;
+    const entry = streaks[key];
+    if (!entry) return;
+    const today = todayDateStr();
+    if (entry.lastDate !== today) return;
+    const newCount = Math.max(0, entry.count - 1);
+    if (newCount === 0) {
+      delete streaks[key];
+    } else {
+      streaks[key] = { count: newCount, lastDate: prevScheduledDay(chore.days, today) || '' };
+    }
+    saveStreaks(streaks);
+  }
+
   // ── State Storage ─────────────────────────────────────────
   function todayKey() {
     const d = new Date();
@@ -194,6 +265,17 @@ window.Chores = (() => {
       setTimeout(() => flash.remove(), 2500);
     }
 
+    // Undo toast — refunds the points if tapped.
+    window.App?.showUndoToast?.(
+      `${reward.emoji || '🎁'} ${kid.name}: ${reward.name} claimed (−${reward.points} pts)`,
+      () => {
+        const p = getPoints();
+        p[kid.id] = (p[kid.id] || 0) + reward.points;
+        savePoints(p);
+        renderChores();
+      }
+    );
+
     renderChores();
   }
 
@@ -251,12 +333,14 @@ window.Chores = (() => {
         const done = !!state[choreKey(kid.id, chore.id)];
         const isActive = period === activePeriod || period === 'anytime';
         const pts = chore.points || 0;
+        const streakCount = getChoreStreak(kid.id, chore);
         const item = document.createElement('div');
         item.className = `chore-item${done ? ' done' : ''}${isActive ? ' period-active' : ' period-dim'}`;
 
         item.innerHTML = `
           <div class="chore-checkbox">${done ? '✓' : ''}</div>
           <div class="chore-task">${escapeHtml(chore.task)}</div>
+          ${streakCount >= 2 ? `<div class="chore-streak-badge" title="${streakCount}-day streak">🔥 ${streakCount}</div>` : ''}
           ${pts > 0 ? `<div class="chore-pts-badge${done ? ' earned' : ''}">⭐ ${pts}</div>` : ''}
         `;
         item.addEventListener('click', () => toggleChore(kid.id, chore.id));
@@ -292,20 +376,40 @@ window.Chores = (() => {
     state[key]   = !wasDone;
     saveState(state);
 
-    // Update points
     const chores = getKidChores(kidId);
     const chore  = chores.find(c => c.id === choreId);
-    if (chore && (chore.points || 0) > 0) {
+    const choreTask = chore?.task || 'Chore';
+    const cPts = chore?.points || 0;
+
+    // Update points
+    if (chore && cPts > 0) {
       const pts = getPoints();
-      pts[kidId] = Math.max(0, (pts[kidId] || 0) + (wasDone ? -(chore.points) : chore.points));
+      pts[kidId] = Math.max(0, (pts[kidId] || 0) + (wasDone ? -cPts : cPts));
       savePoints(pts);
     }
+
+    // Update streak on this chore
+    if (chore) {
+      if (!wasDone) bumpStreak(kidId, chore);
+      else          decrementStreak(kidId, chore);
+    }
+
+    // Undo toast — re-toggle to revert points + streak + state
+    const kid = getKids().find(k => k.id === kidId);
+    const kidName = kid?.name || '';
+    const action  = wasDone ? 'Unchecked' : 'Checked';
+    window.App?.showUndoToast?.(
+      `${action}: ${kidName ? kidName + ' · ' : ''}${choreTask}${cPts ? ` (${wasDone ? '-' : '+'}${cPts} pts)` : ''}`,
+      () => toggleChore(kidId, choreId)
+    );
 
     renderChores();
   }
 
   // ── Full Render ───────────────────────────────────────────
   function renderChores() {
+    // Keep the Today-page strip fresh whenever the chores page re-renders.
+    renderTodayStrip();
     const page = document.getElementById('chores-page');
     if (!page) return;
     page.innerHTML = '';
@@ -345,5 +449,58 @@ window.Chores = (() => {
 
   function render() { renderChores(); }
 
-  return { render, startMidnightReset };
+  // ── Compact chore strip for the Today page ────────────────
+  function renderTodayStrip() {
+    const host = document.getElementById('today-chore-strip');
+    if (!host) return;
+
+    const kids = getKids();
+    if (kids.length === 0) { host.style.display = 'none'; host.innerHTML = ''; return; }
+
+    const state = loadState();
+    host.style.display = '';
+    host.innerHTML = `<div class="today-chore-strip-label">Chores Today</div>`;
+
+    const grid = document.createElement('div');
+    grid.className = 'today-chore-strip-grid';
+
+    let anyToday = false;
+    kids.forEach(kid => {
+      const chores = todayChores(kid.id);
+      if (chores.length === 0) return;
+      anyToday = true;
+      const done = chores.filter(c => state[choreKey(kid.id, c.id)]).length;
+      const pct = Math.round(done / chores.length * 100);
+      const allDone = done === chores.length;
+
+      const card = document.createElement('div');
+      card.className = `today-chore-strip-card${allDone ? ' all-done' : ''}`;
+      card.innerHTML = `
+        <div class="tcs-kid-name" style="color:${escapeHtml(kid.color || 'var(--text-primary)')}">
+          ${escapeHtml(kid.emoji || '')} ${escapeHtml(kid.name)}
+        </div>
+        <div class="tcs-progress">
+          <div class="tcs-count">${done}/${chores.length}${allDone ? ' ✓' : ''}</div>
+          <div class="tcs-bar">
+            <div class="tcs-bar-fill" style="width:${pct}%;background:${escapeHtml(kid.color || 'var(--accent-blue)')}"></div>
+          </div>
+        </div>
+      `;
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', () => {
+        const idx = (CONFIG.PAGES || []).indexOf('chores');
+        if (idx >= 0) window.App?.goTo?.(idx);
+      });
+      grid.appendChild(card);
+    });
+
+    if (!anyToday) {
+      host.innerHTML = '';
+      host.style.display = 'none';
+      return;
+    }
+    host.appendChild(grid);
+  }
+
+  return { render, renderTodayStrip, startMidnightReset };
 })();
