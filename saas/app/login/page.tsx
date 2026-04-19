@@ -39,6 +39,22 @@ export default async function LoginPage() {
             </button>
           </form>
 
+          <form
+            action={async () => {
+              'use server'
+              await signIn('microsoft-entra-id', { redirectTo: '/dashboard' })
+            }}
+            className="mt-3"
+          >
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-95"
+            >
+              <MicrosoftIcon />
+              Continue with Microsoft
+            </button>
+          </form>
+
           <p className="mt-6 text-center text-xs text-gray-500">
             By signing in you agree to our{' '}
             <a href="/privacy" className="underline hover:text-gray-300">Privacy Policy</a>
@@ -77,6 +93,18 @@ function GoogleIcon() {
         fill="#EA4335"
         d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z"
       />
+    </svg>
+  )
+}
+
+function MicrosoftIcon() {
+  // Official Microsoft four-square logo, simplified.
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <rect x="1"  y="1"  width="7.5" height="7.5" fill="#F25022" />
+      <rect x="9.5" y="1"  width="7.5" height="7.5" fill="#7FBA00" />
+      <rect x="1"  y="9.5" width="7.5" height="7.5" fill="#00A4EF" />
+      <rect x="9.5" y="9.5" width="7.5" height="7.5" fill="#FFB900" />
     </svg>
   )
 }
