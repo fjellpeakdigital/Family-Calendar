@@ -503,6 +503,80 @@ window.Calendar = (() => {
     container.appendChild(grid);
   }
 
+  // ── Agenda View ───────────────────────────────────────────
+  function renderAgendaView(container) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const span  = Math.max(14, CONFIG.CALENDAR_LOOKAHEAD_DAYS || 14);
+
+    // Use the _viewDate so prev/next shifts the agenda window
+    const viewStart = new Date(_viewDate); viewStart.setHours(0,0,0,0);
+    const titleEl   = document.getElementById('cal-view-title');
+    if (titleEl) {
+      const endView = addDays(viewStart, span - 1);
+      const sMonth  = MONTH_FULL[viewStart.getMonth()];
+      const eMonth  = MONTH_FULL[endView.getMonth()];
+      titleEl.textContent = sMonth === eMonth
+        ? `${sMonth} ${viewStart.getDate()} – ${endView.getDate()}, ${endView.getFullYear()}`
+        : `${sMonth} ${viewStart.getDate()} – ${eMonth} ${endView.getDate()}, ${endView.getFullYear()}`;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'cal-agenda-list';
+
+    let hadAny = false;
+    for (let i = 0; i < span; i++) {
+      const day = addDays(viewStart, i);
+      const events = eventsForDay(day);
+      if (events.length === 0) continue;
+      hadAny = true;
+
+      const section = document.createElement('div');
+      section.className = 'cal-agenda-day';
+
+      const header = document.createElement('div');
+      const isToday = isSameDay(day, today);
+      header.className = `cal-agenda-day-header${isToday ? ' today' : ''}`;
+      header.innerHTML = `
+        <span class="cal-agenda-dayname">${DAY_SHORT[day.getDay()]}</span>
+        <span class="cal-agenda-daynum">${day.getDate()}</span>
+        <span class="cal-agenda-daymonth">${MONTH_FULL[day.getMonth()].slice(0,3)}</span>
+        ${isToday ? '<span class="cal-agenda-today-pill">Today</span>' : ''}
+      `;
+      section.appendChild(header);
+
+      events.forEach(ev => {
+        const row = document.createElement('div');
+        row.className = 'cal-agenda-row';
+        row.style.borderLeftColor = ev.color;
+        row.innerHTML = `
+          <div class="cal-agenda-time">
+            ${ev.allDay
+              ? '<span class="cal-agenda-allday">All day</span>'
+              : `<span class="cal-agenda-time-start">${escapeHtml(formatTime(ev.start, false))}</span>`}
+          </div>
+          <div class="cal-agenda-body">
+            <div class="cal-agenda-title">${ev.owner ? `<span class="ev-owner-prefix">${escapeHtml(ev.owner)}</span> – ` : ''}${escapeHtml(ev.title)}</div>
+            ${ev.location ? `<div class="cal-agenda-loc">📍 ${escapeHtml(ev.location)}</div>` : ''}
+          </div>
+          <span class="cal-agenda-arrow">›</span>
+        `;
+        makeChipClickable(row, ev.id);
+        section.appendChild(row);
+      });
+
+      list.appendChild(section);
+    }
+
+    if (!hadAny) {
+      const empty = document.createElement('div');
+      empty.className = 'cal-agenda-empty';
+      empty.textContent = `No events in the next ${span} days.`;
+      list.appendChild(empty);
+    }
+
+    container.appendChild(list);
+  }
+
   // ── Event Detail Modal ────────────────────────────────────
   function makeChipClickable(el, evId) {
     el.style.cursor = 'pointer';
@@ -908,6 +982,8 @@ window.Calendar = (() => {
 
     if (_view === 'month') {
       renderMonthView(container);
+    } else if (_view === 'agenda') {
+      renderAgendaView(container);
     } else {
       const start = _view === '4day'
         ? (() => { const d = new Date(_viewDate); d.setHours(0,0,0,0); return d; })()
@@ -958,6 +1034,9 @@ window.Calendar = (() => {
       _viewDate = addDays(_viewDate, dir * 4);
     } else if (_view === 'week') {
       _viewDate = addDays(_viewDate, dir * 7);
+    } else if (_view === 'agenda') {
+      const span = Math.max(14, CONFIG.CALENDAR_LOOKAHEAD_DAYS || 14);
+      _viewDate = addDays(_viewDate, dir * span);
     } else {
       _viewDate = new Date(_viewDate.getFullYear(), _viewDate.getMonth() + dir, 1);
     }
@@ -968,7 +1047,7 @@ window.Calendar = (() => {
 
   function setView(v) {
     _view = v;
-    ['week','4day','month'].forEach(name => {
+    ['week','4day','month','agenda'].forEach(name => {
       const btn = document.getElementById(`btn-${name}`);
       if (btn) btn.classList.toggle('active', v === name);
     });
@@ -986,7 +1065,7 @@ window.Calendar = (() => {
     // Redraw time grid every minute to keep now-line accurate
     setInterval(() => {
       const container = document.getElementById('cal-view-container');
-      if (container && _view !== 'month') render();
+      if (container && _view !== 'month' && _view !== 'agenda') render();
     }, 60_000);
   }
 
