@@ -203,9 +203,11 @@ window.Weather = (() => {
     try {
       _data      = await fetchWeather();
       _fetchedAt = Date.now();
+      window.App?.recordDataFetch?.('weather', true);
       renderWeather();
     } catch (e) {
       console.error('Weather render error:', e);
+      window.App?.recordDataFetch?.('weather', false);
       const condEl = document.getElementById('weather-condition');
       if (condEl) condEl.textContent = 'Weather unavailable';
     }
@@ -227,7 +229,14 @@ window.Weather = (() => {
   // expose renderTodayPanel for Today page + ensure data is fetched first
   async function renderTodayPanelWithFetch(force = false) {
     if (!_data || force) {
-      try { _data = await fetchWeather(); _fetchedAt = Date.now(); } catch (e) { console.error(e); }
+      try {
+        _data = await fetchWeather();
+        _fetchedAt = Date.now();
+        window.App?.recordDataFetch?.('weather', true);
+      } catch (e) {
+        console.error(e);
+        window.App?.recordDataFetch?.('weather', false);
+      }
     }
     renderTodayPanel();
   }

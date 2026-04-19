@@ -232,6 +232,70 @@ window.App = (() => {
     document.addEventListener('wheel',      bump, { passive: true });
   }
 
+  // ── Data Status (online/offline + cache age chip) ─────────
+  const _dataStatus = {
+    calendar: { lastOk: 0, lastError: 0 },
+    weather:  { lastOk: 0, lastError: 0 },
+  };
+  const STALE_MS = { calendar: 15 * 60_000, weather: 30 * 60_000 };
+
+  function recordDataFetch(kind, ok) {
+    if (!_dataStatus[kind]) return;
+    if (ok) _dataStatus[kind].lastOk    = Date.now();
+    else    _dataStatus[kind].lastError = Date.now();
+    renderDataStatus();
+  }
+
+  function renderDataStatus() {
+    const el = document.getElementById('data-status');
+    if (!el) return;
+
+    if (!navigator.onLine) {
+      el.className = 'data-status err';
+      el.textContent = '● Offline';
+      el.title = 'No network connection — data may be stale';
+      return;
+    }
+
+    const now = Date.now();
+    const staleKinds = [];
+    for (const kind of ['calendar', 'weather']) {
+      const { lastOk } = _dataStatus[kind];
+      if (!lastOk) continue;
+      const age = now - lastOk;
+      if (age > STALE_MS[kind]) staleKinds.push({ kind, age });
+    }
+
+    if (staleKinds.length === 0) {
+      // Fully fresh — hide chip unless error recorded after last success
+      const anyError = ['calendar','weather'].some(k =>
+        _dataStatus[k].lastError > _dataStatus[k].lastOk && _dataStatus[k].lastError
+      );
+      if (anyError) {
+        el.className = 'data-status warn';
+        el.textContent = '● Fetch error';
+        el.title = 'A recent fetch failed — check console';
+      } else {
+        el.className = 'data-status hidden';
+        el.textContent = '';
+      }
+      return;
+    }
+
+    const oldest = staleKinds.reduce((a, b) => a.age > b.age ? a : b);
+    const mins = Math.round(oldest.age / 60_000);
+    el.className = 'data-status warn';
+    el.textContent = `● Stale ${mins}m`;
+    el.title = staleKinds.map(s => `${s.kind}: ${Math.round(s.age/60_000)}m old`).join(' · ');
+  }
+
+  function initDataStatus() {
+    window.addEventListener('online',  renderDataStatus);
+    window.addEventListener('offline', renderDataStatus);
+    setInterval(renderDataStatus, 30_000);
+    renderDataStatus();
+  }
+
   // ── Undo Toast ────────────────────────────────────────────
   // Shows a bottom-screen toast with an Undo button.
   // Calling again while one is visible dismisses the prior toast.
@@ -339,6 +403,7 @@ window.App = (() => {
     initKeyboard();
     startAutoAdvance();
     initAutoPause();
+    initDataStatus();
     requestFullscreenOnce();
 
     Calendar.startAutoRefresh();
@@ -350,7 +415,7 @@ window.App = (() => {
     });
   }
 
-  return { init, goTo, next, prev, toggleTheme, showUndoToast, pauseAutoAdvance, applyKidMode };
+  return { init, goTo, next, prev, toggleTheme, showUndoToast, pauseAutoAdvance, applyKidMode, recordDataFetch };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {

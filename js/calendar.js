@@ -231,13 +231,16 @@ window.Calendar = (() => {
       tokens.map(tok => fetchEventsForToken(tok, minDate, maxDate))
     );
     _cache = {}; _eventsById = {};
+    let anyOk = tokens.length === 0;  // nothing to fetch is not a failure
     results.forEach((r, i) => {
       _cache[i] = r.status === 'fulfilled' ? r.value : [];
+      if (r.status === 'fulfilled') anyOk = true;
       _cache[i].forEach(ev => { _eventsById[ev.id] = ev; });
     });
     _lastFetch = Date.now();
     _fetchMin  = minDate.toISOString();
     _fetchMax  = maxDate.toISOString();
+    window.App?.recordDataFetch?.('calendar', anyOk);
   }
 
   // ── Time Grid (shared by week + 4-day) ────────────────────
