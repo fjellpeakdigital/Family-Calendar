@@ -8,7 +8,13 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { decryptToken } from '@/lib/crypto'
 import { sendEventReminderEmail } from '@/lib/email'
-import type { AppSettings, UserNotificationPrefs } from '@/lib/supabase/types'
+import { sendPushNotification } from '@/lib/push'
+import type {
+  AppSettings,
+  PushSubscriptionRecord,
+  QuietHours,
+  UserNotificationPrefs,
+} from '@/lib/supabase/types'
 
 const TICK_WINDOW_MS   = 60_000          // one-minute scheduler tick
 const DEFAULT_OFFSET   = 15              // fallback family default (minutes)
@@ -146,12 +152,16 @@ async function processFamily(
     ((prefsRes.data ?? []) as UserNotificationPrefs[]).map(p => [p.user_id, p])
   )
 
-  // Iterate horizon rows, compute due sends
+  // Iterate horizon rows, compute due sends per (user, channel)
+  type Channel = 'email' | 'push'
   type DuePayload = {
     row: HorizonRow
     personId: string
     offsetMin: number
+    channel: Channel
     user: typeof users[number]
+    /** Push only — the specific endpoints this user has registered. */
+    endpoints: PushSubscriptionRecord[]
   }
   const due: DuePayload[] = []
 
@@ -178,77 +188,165 @@ async function processFamily(
 
     for (const personId of responsible) {
       const user = userByPersonId.get(personId)
-      if (!user) continue   // responsible person isn't a linked user — nothing to email
+      if (!user) continue
       const prefs = prefsByUser.get(user.id)
-      if (prefs && prefs.email_enabled === false) continue
 
-      due.push({ row, personId, offsetMin, user })
+      if (isInQuietHours(remindAt, prefs?.quiet_hours ?? null)) continue
+
+      if (prefs?.email_enabled !== false) {
+        due.push({ row, personId, offsetMin, channel: 'email', user, endpoints: [] })
+      }
+      if (prefs?.push_enabled && prefs.push_endpoints?.length > 0) {
+        due.push({
+          row, personId, offsetMin, channel: 'push', user,
+          endpoints: prefs.push_endpoints,
+        })
+      }
     }
   }
 
   if (due.length === 0) return 0
 
-  // Idempotency: one query to find already-sent email reminders
+  // Idempotency: one query to find already-sent reminders for the
+  // event_keys we're about to touch (covers both email and push channels).
   const { data: sentRows } = await supabase
     .from('reminder_sends')
-    .select('event_key, person_id, offset_min')
+    .select('event_key, person_id, offset_min, channel')
     .eq('family_id', familyId)
-    .eq('channel', 'email')
     .in('event_key', due.map(d => d.row.event_key))
 
   const sentSet = new Set(
-    (sentRows ?? []).map(r => `${r.event_key}|${r.person_id}|${r.offset_min}`)
+    (sentRows ?? []).map(r => `${r.event_key}|${r.person_id}|${r.offset_min}|${r.channel}`)
   )
+
+  // Track per-user push endpoints that came back as gone so we can
+  // remove them after the batch.
+  const deadEndpointsByUser = new Map<string, Set<string>>()
 
   let actuallySent = 0
 
   for (const d of due) {
-    const key = `${d.row.event_key}|${d.personId}|${d.offsetMin}`
+    const key = `${d.row.event_key}|${d.personId}|${d.offsetMin}|${d.channel}`
     if (sentSet.has(key)) continue
 
-    // Reserve the slot first — insert with unique-key protects against
-    // two workers racing. If insert fails on conflict, assume another
-    // worker handled it and move on.
+    // Reserve the slot first — composite PK blocks two workers from
+    // double-sending the same reminder. Insert failure = raced, skip.
     const { error: insErr } = await supabase.from('reminder_sends').insert({
       family_id:  familyId,
       event_key:  d.row.event_key,
       person_id:  d.personId,
       offset_min: d.offsetMin,
-      channel:    'email',
+      channel:    d.channel,
     })
-    if (insErr) {
-      // Duplicate key is the expected race outcome — silent skip.
-      continue
-    }
+    if (insErr) continue
 
     const title    = d.row.title_enc    ? decryptToken(d.row.title_enc)    : '(No title)'
     const location = d.row.location_enc ? decryptToken(d.row.location_enc) : null
 
     try {
-      await sendEventReminderEmail({
-        to:            d.user.email,
-        recipientName: d.user.name ?? null,
-        title,
-        location,
-        startAt:       d.row.start_at,
-        use24h:        settings?.use24h ?? false,
-      })
-      actuallySent++
+      if (d.channel === 'email') {
+        await sendEventReminderEmail({
+          to:            d.user.email,
+          recipientName: d.user.name ?? null,
+          title,
+          location,
+          startAt:       d.row.start_at,
+          use24h:        settings?.use24h ?? false,
+        })
+        actuallySent++
+      } else {
+        // Fan out to every registered endpoint for this user. Dead
+        // endpoints get queued for removal below.
+        let any = false
+        for (const sub of d.endpoints) {
+          const result = await sendPushNotification(sub, {
+            title: `Reminder: ${title}`,
+            body:  location ? `${whenShort(d.row.start_at, settings?.use24h ?? false)} · ${location}`
+                            : whenShort(d.row.start_at, settings?.use24h ?? false),
+            url:   '/me',
+            tag:   `event:${d.row.event_key}:${d.offsetMin}`,
+          })
+          if (result.ok) any = true
+          if (result.gone) {
+            const set = deadEndpointsByUser.get(d.user.id) ?? new Set<string>()
+            set.add(sub.endpoint)
+            deadEndpointsByUser.set(d.user.id, set)
+          }
+        }
+        if (any) actuallySent++
+        else {
+          // Roll back so we retry once the endpoints are fixed.
+          await rollbackSend(familyId, d)
+        }
+      }
     } catch (err) {
-      // Roll back the idempotency row so we retry next tick.
-      await supabase
-        .from('reminder_sends')
-        .delete()
-        .eq('family_id',  familyId)
-        .eq('event_key',  d.row.event_key)
-        .eq('person_id',  d.personId)
-        .eq('offset_min', d.offsetMin)
-        .eq('channel',    'email')
+      await rollbackSend(familyId, d)
       throw err
     }
   }
 
+  // Prune any push endpoints that push services marked gone.
+  if (deadEndpointsByUser.size > 0) {
+    await Promise.allSettled(
+      Array.from(deadEndpointsByUser.entries()).map(async ([userId, dead]) => {
+        const prefs = prefsByUser.get(userId)
+        if (!prefs) return
+        const kept = prefs.push_endpoints.filter(e => !dead.has(e.endpoint))
+        await supabase
+          .from('user_notification_prefs')
+          .update({
+            push_endpoints: kept,
+            push_enabled:   kept.length > 0,
+          })
+          .eq('user_id', userId)
+      })
+    )
+  }
+
   return actuallySent
+}
+
+async function rollbackSend(
+  familyId: string,
+  d: { row: HorizonRow; personId: string; offsetMin: number; channel: 'email' | 'push' }
+) {
+  const supabase = createAdminClient()
+  await supabase
+    .from('reminder_sends')
+    .delete()
+    .eq('family_id',  familyId)
+    .eq('event_key',  d.row.event_key)
+    .eq('person_id',  d.personId)
+    .eq('offset_min', d.offsetMin)
+    .eq('channel',    d.channel)
+}
+
+function whenShort(iso: string, use24h: boolean): string {
+  const d = new Date(iso)
+  const h = d.getHours()
+  const m = String(d.getMinutes()).padStart(2, '0')
+  if (use24h) return `${String(h).padStart(2, '0')}:${m}`
+  return `${h % 12 || 12}:${m} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+/**
+ * Quiet hours are local to the user's browser time (we don't know their
+ * tz server-side). Approximate: treat them as the server's local time.
+ * Good enough for v1; revisit if we ever capture per-user timezone.
+ */
+function isInQuietHours(at: Date, qh: QuietHours | null): boolean {
+  if (!qh) return false
+  const [sh, sm] = qh.start.split(':').map(Number)
+  const [eh, em] = qh.end.split(':').map(Number)
+  const mins = at.getHours() * 60 + at.getMinutes()
+  const startMins = sh * 60 + sm
+  const endMins   = eh * 60 + em
+  if (startMins === endMins) return false
+  if (startMins < endMins) {
+    return mins >= startMins && mins < endMins
+  }
+  // Overnight window like 22:00 → 07:00
+  return mins >= startMins || mins < endMins
 }
 
 function normalizeOffset(n: unknown): number | null {

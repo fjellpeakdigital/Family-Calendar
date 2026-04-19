@@ -148,7 +148,7 @@ export async function sendEventReminderEmail(p: EventReminderPayload) {
       <div class="row"><span class="label">When</span><span class="val">${when}</span></div>
       ${p.location ? `<div class="row"><span class="label">Where</span><span class="val">${escapeHtml(p.location)}</span></div>` : ''}
     </div>
-    <a href="${appUrl}/dashboard" class="btn">Open dashboard →</a>
+    <a href="${appUrl}/me" class="btn">Open your day →</a>
     <p style="font-size:13px;color:#484F58;">Reassign, reschedule, or mute reminders from your FamilyDash.</p>
   `)
 
