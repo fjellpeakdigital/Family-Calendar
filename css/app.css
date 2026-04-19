@@ -2617,3 +2617,103 @@ html[data-kid-mode="true"] .reward-claim-btn {
   background: rgba(248, 81, 73, 0.12);
   border: 1px solid rgba(248, 81, 73, 0.3);
 }
+
+/* ──────────────────────────────────────────────────────────
+   Event Modal — action buttons + edit/create form
+   ────────────────────────────────────────────────────────── */
+.emd-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.emd-actions .emd-gcal-link {
+  margin-right: auto;  /* push gcal link to the left, actions to the right */
+}
+.emd-readonly-note {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.emd-title-edit {
+  flex: 1;
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.emd-form {
+  padding: 20px 28px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.emd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.emd-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.emd-field-inline input[type="checkbox"] {
+  width: 18px; height: 18px;
+  accent-color: var(--accent-blue);
+}
+.emd-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.emd-field-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.emd-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ef-time-field input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.emd-error {
+  font-size: 13px;
+  color: var(--danger, #F85149);
+  padding: 8px 10px;
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 8px;
+}
+.emd-form input[type="date"],
+.emd-form input[type="time"] {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color-scheme: dark light;
+}
+
+/* Hover hint on empty time-grid columns and month cells */
+.cal-tgrid-col,
+.cal-month-cell {
+  cursor: pointer;
+}
+.cal-tgrid-col:hover {
+  background: rgba(255,255,255,0.02);
+}
+.cal-month-cell:hover {
+  border-color: rgba(88,166,255,0.25);
+}

@@ -105,7 +105,7 @@ window.Auth = (() => {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.GOOGLE_CLIENT_ID,
         // Include email/profile so we can identify the account via userinfo
-        scope:     'https://www.googleapis.com/auth/calendar.readonly openid email profile',
+        scope:     'https://www.googleapis.com/auth/calendar.events openid email profile',
         hint:      hintEmail || undefined,
         callback:  async (tokenResponse) => {
           if (tokenResponse.error) {
@@ -173,7 +173,7 @@ window.Auth = (() => {
     return new Promise((resolve) => {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.GOOGLE_CLIENT_ID,
-        scope:     'https://www.googleapis.com/auth/calendar.readonly openid email profile',
+        scope:     'https://www.googleapis.com/auth/calendar.events openid email profile',
         hint:      email,
         callback:  async (tokenResponse) => {
           if (tokenResponse.error) {

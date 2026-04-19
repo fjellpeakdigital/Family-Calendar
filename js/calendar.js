@@ -201,6 +201,10 @@ window.Calendar = (() => {
           end:         item.end?.dateTime   || item.end?.date,
           color:       person.color,
           owner:       person.name,
+          personId:    person.id,
+          calendarId:  assignment.calendarId,
+          accountEmail: tok.email,
+          recurring:   !!item.recurringEventId,
           description: item.description || '',
           location:    item.location    || '',
           htmlLink:    item.htmlLink    || '',
@@ -343,6 +347,18 @@ window.Calendar = (() => {
       col.className = `cal-tgrid-col${isToday ? ' today-col' : ''}`;
       col.style.height = `${gridHeight}px`;
 
+      // Click an empty spot to create an event starting at that hour
+      col.addEventListener('click', (e) => {
+        if (e.target !== col) return;  // clicks on events stopPropagation
+        const rect = col.getBoundingClientRect();
+        const y    = e.clientY - rect.top;
+        const hour = Math.max(GRID_START, Math.min(GRID_END - 1, Math.floor(y / HOUR_PX + GRID_START)));
+        const startDate = new Date(day);
+        startDate.setHours(hour, 0, 0, 0);
+        const endDate   = new Date(startDate.getTime() + 60*60000);
+        showEventForm({ initial: { start: startDate, end: endDate, allDay: false } });
+      });
+
       // Hour and half-hour grid lines
       for (let h = 0; h < totalHours; h++) {
         const line = document.createElement('div');
@@ -447,6 +463,14 @@ window.Calendar = (() => {
 
       const cell = document.createElement('div');
       cell.className = `cal-month-cell${isToday ? ' today-cell' : ''}${!inMonth ? ' other-month' : ''}`;
+
+      // Click empty area of the cell (not an event chip) to create all-day
+      cell.addEventListener('click', (e) => {
+        if (e.target !== cell && e.target.className !== 'cal-month-date') return;
+        const startDate = new Date(cellDate); startDate.setHours(0,0,0,0);
+        const endDate   = new Date(startDate);
+        showEventForm({ initial: { start: startDate, end: endDate, allDay: true } });
+      });
 
       const dateNum = document.createElement('div');
       dateNum.className = 'cal-month-date';
@@ -557,10 +581,21 @@ window.Calendar = (() => {
           <span class="emd-text emd-desc">${desc}</span>
         </div>` : ''}
       </div>
-      ${ev.htmlLink ? `<div class="emd-footer">
-        <a class="emd-gcal-link" href="${ev.htmlLink}" target="_blank" rel="noopener">Open in Google Calendar ↗</a>
-      </div>` : ''}
+      <div class="emd-footer emd-actions">
+        ${ev.recurring
+          ? '<span class="emd-readonly-note" title="Edit recurring events in Google Calendar">Recurring — read-only here</span>'
+          : `
+            <button class="btn btn-sm btn-danger"  id="emd-delete">Delete</button>
+            <button class="btn btn-sm btn-outline" id="emd-edit">Edit</button>
+          `}
+        ${ev.htmlLink ? `<a class="emd-gcal-link" href="${ev.htmlLink}" target="_blank" rel="noopener">Open in Google Calendar ↗</a>` : ''}
+      </div>
     `;
+
+    if (!ev.recurring) {
+      body.querySelector('#emd-edit')?.addEventListener('click', () => showEditForm(ev));
+      body.querySelector('#emd-delete')?.addEventListener('click', () => confirmDelete(ev));
+    }
 
     overlay.classList.add('visible');
     overlay.onclick = e => { if (e.target === overlay) closeModal(); };
@@ -569,6 +604,179 @@ window.Calendar = (() => {
   function closeModal() {
     const overlay = document.getElementById('event-modal-overlay');
     if (overlay) overlay.classList.remove('visible');
+  }
+
+  // ── Edit / Create Form ────────────────────────────────────
+  // Single form used for both editing an existing event and creating a new
+  // one. Pass either { ev } for edit or { initial, personId } for create.
+  function showEventForm({ ev = null, initial = null, personId = null }) {
+    const overlay = document.getElementById('event-modal-overlay');
+    const body    = document.getElementById('event-modal-body');
+    if (!overlay || !body) return;
+
+    const isEdit = !!ev;
+    const people = _getPeople();
+    const assigned = people.filter(p =>
+      _getAssignments().some(a => a.personId === p.id)
+    );
+    const selectedPersonId = personId || ev?.personId || assigned[0]?.id || '';
+
+    // Build start/end Date objects from event or provided initial time
+    let start, end, allDay;
+    if (isEdit) {
+      allDay = ev.allDay;
+      start  = new Date(ev.start + (allDay && ev.start.length === 10 ? 'T00:00:00' : ''));
+      end    = ev.end ? new Date(ev.end + (allDay && ev.end.length === 10 ? 'T00:00:00' : '')) : new Date(start.getTime() + 60*60000);
+    } else {
+      allDay = initial?.allDay || false;
+      start  = initial?.start || new Date();
+      end    = initial?.end   || new Date(start.getTime() + 60*60000);
+    }
+
+    const dStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const tStr = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+    body.innerHTML = `
+      <div class="emd-header">
+        <span class="emd-color-bar" style="background:${escapeHtml(people.find(p=>p.id===selectedPersonId)?.color || '#888')}"></span>
+        <div class="emd-title-edit">${isEdit ? 'Edit event' : 'New event'}</div>
+        <button class="emd-close" type="button" onclick="Calendar.closeModal()" aria-label="Close">✕</button>
+      </div>
+      <form class="emd-form" id="emd-form">
+        <label class="emd-field">
+          <span class="emd-label">Title</span>
+          <input id="ef-title" type="text" class="admin-input" value="${escapeHtml(ev?.title || '')}" placeholder="Event title" required />
+        </label>
+
+        <label class="emd-field">
+          <span class="emd-label">Who</span>
+          <select id="ef-person" class="admin-select" ${isEdit ? 'disabled' : ''}>
+            ${assigned.map(p => `
+              <option value="${escapeHtml(p.id)}" ${p.id === selectedPersonId ? 'selected' : ''}>
+                ${escapeHtml(p.emoji || '')} ${escapeHtml(p.name)}
+              </option>
+            `).join('')}
+          </select>
+          ${isEdit ? '<span class="emd-field-hint">Move in Google Calendar to reassign</span>' : ''}
+        </label>
+
+        <label class="emd-field emd-field-inline">
+          <input id="ef-allday" type="checkbox" ${allDay ? 'checked' : ''} />
+          <span>All-day event</span>
+        </label>
+
+        <div class="emd-field-row">
+          <label class="emd-field">
+            <span class="emd-label">Start date</span>
+            <input id="ef-start-date" type="date" class="admin-input" value="${dStr(start)}" />
+          </label>
+          <label class="emd-field ef-time-field">
+            <span class="emd-label">Start time</span>
+            <input id="ef-start-time" type="time" class="admin-input" value="${tStr(start)}" ${allDay ? 'disabled' : ''} />
+          </label>
+        </div>
+
+        <div class="emd-field-row">
+          <label class="emd-field">
+            <span class="emd-label">End date</span>
+            <input id="ef-end-date" type="date" class="admin-input" value="${dStr(end)}" />
+          </label>
+          <label class="emd-field ef-time-field">
+            <span class="emd-label">End time</span>
+            <input id="ef-end-time" type="time" class="admin-input" value="${tStr(end)}" ${allDay ? 'disabled' : ''} />
+          </label>
+        </div>
+
+        <label class="emd-field">
+          <span class="emd-label">Location <span class="emd-field-hint">(optional)</span></span>
+          <input id="ef-location" type="text" class="admin-input" value="${escapeHtml(ev?.location || '')}" />
+        </label>
+
+        <div id="ef-error" class="emd-error" style="display:none"></div>
+
+        <div class="emd-footer emd-actions">
+          <button type="button" class="btn btn-sm btn-outline" id="ef-cancel">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary" id="ef-save">${isEdit ? 'Save' : 'Create'}</button>
+        </div>
+      </form>
+    `;
+
+    overlay.classList.add('visible');
+
+    const allDayChk = body.querySelector('#ef-allday');
+    const startTime = body.querySelector('#ef-start-time');
+    const endTime   = body.querySelector('#ef-end-time');
+    allDayChk.addEventListener('change', () => {
+      startTime.disabled = allDayChk.checked;
+      endTime.disabled   = allDayChk.checked;
+    });
+
+    body.querySelector('#ef-cancel').addEventListener('click', closeModal);
+
+    body.querySelector('#emd-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = body.querySelector('#ef-error');
+      err.style.display = 'none';
+
+      const title   = body.querySelector('#ef-title').value.trim();
+      const isAllDay = allDayChk.checked;
+      const sDate = body.querySelector('#ef-start-date').value;
+      const eDate = body.querySelector('#ef-end-date').value;
+      const sTime = body.querySelector('#ef-start-time').value || '00:00';
+      const eTime = body.querySelector('#ef-end-time').value   || '00:00';
+      const location = body.querySelector('#ef-location').value.trim();
+      const personIdSel = body.querySelector('#ef-person').value;
+
+      if (!title) { err.textContent = 'Title is required.'; err.style.display = 'block'; return; }
+
+      let startIso, endIso;
+      if (isAllDay) {
+        startIso = `${sDate}T00:00:00`;
+        // Google all-day end dates are exclusive; if user picks same day, bump by 1
+        const endDate = new Date(eDate + 'T00:00:00');
+        if (endDate <= new Date(sDate + 'T00:00:00')) endDate.setDate(endDate.getDate() + 1);
+        endIso = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}T00:00:00`;
+      } else {
+        const s = new Date(`${sDate}T${sTime}:00`);
+        let   eD = new Date(`${eDate}T${eTime}:00`);
+        if (eD <= s) eD = new Date(s.getTime() + 60*60000);
+        startIso = s.toISOString();
+        endIso   = eD.toISOString();
+      }
+
+      const patch = { title, location, allDay: isAllDay, startIso, endIso };
+      const saveBtn = body.querySelector('#ef-save');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+
+      try {
+        if (isEdit) await updateEvent(ev, patch);
+        else        await createEvent(personIdSel, patch);
+        closeModal();
+      } catch (e) {
+        console.error('Save failed:', e);
+        err.textContent = e.message === 'SCOPE_UPGRADE_REQUIRED'
+          ? 'Google is reconnecting with write access — please try again after sign-in completes.'
+          : `Save failed: ${e.message || e}`;
+        err.style.display = 'block';
+        saveBtn.disabled = false;
+        saveBtn.textContent = isEdit ? 'Save' : 'Create';
+      }
+    });
+  }
+
+  function showEditForm(ev)     { showEventForm({ ev }); }
+  function showCreateForm(opts) { showEventForm(opts); }
+
+  async function confirmDelete(ev) {
+    if (!confirm(`Delete "${ev.title}"? This cannot be undone.`)) return;
+    try {
+      await deleteEvent(ev);
+      closeModal();
+    } catch (e) {
+      console.error('Delete failed:', e);
+      alert(`Delete failed: ${e.message || e}`);
+    }
   }
 
   // ── Filter chip row ───────────────────────────────────────
@@ -605,6 +813,86 @@ window.Calendar = (() => {
       all.addEventListener('click', clearPersonFilter);
       host.appendChild(all);
     }
+  }
+
+  // ── Event Write API (create / update / delete) ───────────
+  // All three throw on failure so callers can show a toast. A 403 with
+  // "insufficient" in the body means the token was granted with the old
+  // readonly scope — we force a full signIn to upgrade.
+  async function _apiWrite(accountEmail, url, method, body) {
+    const tok = Auth.getAllTokens().find(t => t.email === accountEmail);
+    if (!tok || !Auth.isValid(tok)) throw new Error('NO_VALID_TOKEN');
+    const resp = await Auth.apiFetch(tok, url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (resp.status === 403) {
+      const text = await resp.text();
+      if (/insufficient/i.test(text)) {
+        // Trigger full consent so the new calendar.events scope is granted
+        await Auth.signIn(accountEmail);
+        throw new Error('SCOPE_UPGRADE_REQUIRED');
+      }
+      throw new Error(`403 ${text}`);
+    }
+    if (resp.status === 204) return null;
+    if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
+    return resp.json();
+  }
+
+  async function updateEvent(ev, patch) {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ev.calendarId)}/events/${encodeURIComponent(ev.id)}`;
+    const body = _eventBodyFromPatch(patch);
+    const updated = await _apiWrite(ev.accountEmail, url, 'PATCH', body);
+    await fetchAll(true);
+    render();
+    if (document.getElementById('today-events-panel')) renderTodayPanel();
+    return updated;
+  }
+
+  async function deleteEvent(ev) {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ev.calendarId)}/events/${encodeURIComponent(ev.id)}`;
+    await _apiWrite(ev.accountEmail, url, 'DELETE');
+    delete _eventsById[ev.id];
+    await fetchAll(true);
+    render();
+    if (document.getElementById('today-events-panel')) renderTodayPanel();
+  }
+
+  async function createEvent(personId, patch) {
+    const assignments = _getAssignments().filter(a => a.personId === personId);
+    if (assignments.length === 0) throw new Error('NO_CALENDAR_FOR_PERSON');
+    // Prefer an assignment whose account token is valid
+    const validTokens = new Set(Auth.getValidTokens().map(t => t.email));
+    const chosen = assignments.find(a => validTokens.has(a.accountEmail)) || assignments[0];
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(chosen.calendarId)}/events`;
+    const body = _eventBodyFromPatch(patch);
+    const created = await _apiWrite(chosen.accountEmail, url, 'POST', body);
+    await fetchAll(true);
+    render();
+    if (document.getElementById('today-events-panel')) renderTodayPanel();
+    return created;
+  }
+
+  // Convert our edit-form shape into Google Calendar's request body.
+  // patch: { title, allDay, startIso, endIso, location, description }
+  function _eventBodyFromPatch(p) {
+    const body = {};
+    if ('title'       in p) body.summary     = p.title;
+    if ('location'    in p) body.location    = p.location || '';
+    if ('description' in p) body.description = p.description || '';
+    if ('startIso' in p || 'endIso' in p || 'allDay' in p) {
+      if (p.allDay) {
+        // All-day events use `date` (YYYY-MM-DD). End is exclusive.
+        body.start = { date: p.startIso.slice(0, 10) };
+        body.end   = { date: p.endIso.slice(0, 10) };
+      } else {
+        body.start = { dateTime: p.startIso, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+        body.end   = { dateTime: p.endIso,   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+      }
+    }
+    return body;
   }
 
   // ── Public render ──────────────────────────────────────────
@@ -704,5 +992,10 @@ window.Calendar = (() => {
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  return { render, renderTodayPanel, navigate, goToToday, setView, startAutoRefresh, closeModal, togglePersonFilter, clearPersonFilter };
+  return {
+    render, renderTodayPanel, navigate, goToToday, setView, startAutoRefresh,
+    closeModal, togglePersonFilter, clearPersonFilter,
+    createEvent, updateEvent, deleteEvent,
+    showEditForm, showCreateForm,
+  };
 })();
