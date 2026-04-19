@@ -1,8 +1,7 @@
 'use client'
 
 import { useMemo, useEffect, useRef } from 'react'
-import type { Person } from '@/lib/supabase/types'
-import type { CalendarEvent } from './DashboardClient'
+import type { CalendarEvent, Person } from '@/lib/supabase/types'
 
 type CalView = 'today' | 'week' | 'month'
 
@@ -18,6 +17,7 @@ interface Props {
   onViewChange:  (v: CalView) => void
   onNavigate:    (dir: -1 | 1) => void
   onGoToday:     () => void
+  onEventClick?: (event: CalendarEvent) => void
 }
 
 const DAY_NAMES  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -54,6 +54,88 @@ function viewTitle(calView: CalView, viewDate: Date): string {
     return `${mo} – ${dy}, ${yr}`
   }
   return viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+/**
+ * Small stacked avatar row. Used inline on event tiles when the event
+ * has more than one attendee — replaces the single-person name prefix.
+ */
+function AttendeeAvatars({ ids, personById, size }: {
+  ids:        string[]
+  personById: Map<string, Person>
+  size:       number
+}) {
+  if (ids.length <= 1) return null
+  const shown = ids.slice(0, 4)
+  const extra = Math.max(0, ids.length - shown.length)
+  const fs = Math.max(8, Math.round(size * 0.55))
+  return (
+    <span className="mr-1 inline-flex flex-shrink-0 align-middle" aria-label="Attendees">
+      {shown.map((id, i) => {
+        const p = personById.get(id)
+        const bg = p?.color ?? '#4b5563'
+        const initial = (p?.name ?? '?').charAt(0).toUpperCase()
+        return (
+          <span key={id}
+            className="inline-flex items-center justify-center rounded-full border border-gray-900 font-bold text-white"
+            style={{ width: size, height: size, background: bg, fontSize: fs, marginLeft: i === 0 ? 0 : -size * 0.25 }}
+            title={p?.name ?? ''}
+          >
+            {initial}
+          </span>
+        )
+      })}
+      {extra > 0 && (
+        <span className="ml-0.5 inline-flex items-center justify-center rounded-full border border-gray-900 bg-gray-700 font-bold text-gray-200"
+          style={{ width: size, height: size, fontSize: fs }}
+        >
+          +{extra}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * Small top-right badge showing responsible adult(s). Rendered inside
+ * a relatively/absolutely-positioned tile. Only shown when responsible
+ * is non-empty.
+ */
+function ResponsibilityBadge({ ids, personById, size }: {
+  ids:        string[]
+  personById: Map<string, Person>
+  size:       number
+}) {
+  if (ids.length === 0) return null
+  const first = personById.get(ids[0])
+  const bg = first?.color ?? '#4b5563'
+  const initial = (first?.name ?? '?').charAt(0).toUpperCase()
+  const fs = Math.max(8, Math.round(size * 0.55))
+  const extra = ids.length - 1
+  return (
+    <span
+      className="absolute right-0.5 top-0.5 inline-flex items-center gap-0.5 rounded-full px-0.5 py-0.5 text-white"
+      style={{ background: 'rgba(0,0,0,0.35)' }}
+      title={`Responsible: ${ids.map(id => personById.get(id)?.name ?? '').filter(Boolean).join(', ')}`}
+    >
+      <span
+        className="inline-flex items-center justify-center rounded-full font-bold"
+        style={{ width: size, height: size, background: bg, fontSize: fs }}
+      >
+        {initial}
+      </span>
+      {extra > 0 && <span className="pr-0.5 text-[9px] font-bold">+{extra}</span>}
+    </span>
+  )
+}
+
+/**
+ * Per-tile color: keep the source person's color when there is a single
+ * attendee (today's behavior). Fall back to a neutral tint when the
+ * event has multiple attendees so the stacked avatars carry identity.
+ */
+function tileAccent(ev: CalendarEvent): string {
+  return ev.attendeePersonIds.length > 1 ? '#64748b' : ev.color
 }
 
 /**
@@ -94,8 +176,12 @@ function layoutDayEvents(events: CalendarEvent[]) {
 
 // ── Root component ─────────────────────────────────────────────
 
-export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, onViewChange, onNavigate, onGoToday }: Props) {
+export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, onViewChange, onNavigate, onGoToday, onEventClick }: Props) {
   const todayStr = isoDate(now)
+  const personById = useMemo(
+    () => new Map(people.map(p => [p.id, p] as const)),
+    [people]
+  )
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -133,10 +219,11 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
       )}
 
       {calView === 'month'
-        ? <MonthView events={events} viewDate={viewDate} todayStr={todayStr} />
+        ? <MonthView events={events} viewDate={viewDate} todayStr={todayStr} personById={personById} onEventClick={onEventClick} />
         : <TimeGrid
             days={calView === 'today' ? [viewDate] : getWeekDays(viewDate)}
             events={events} now={now} todayStr={todayStr} use24h={use24h}
+            personById={personById} onEventClick={onEventClick}
           />
       }
     </div>
@@ -145,12 +232,14 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
 
 // ── Time grid (Today + Week) ───────────────────────────────────
 
-function TimeGrid({ days, events, now, todayStr, use24h }: {
-  days:     Date[]
-  events:   CalendarEvent[]
-  now:      Date
-  todayStr: string
-  use24h:   boolean
+function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClick }: {
+  days:         Date[]
+  events:       CalendarEvent[]
+  now:          Date
+  todayStr:     string
+  use24h:       boolean
+  personById:   Map<string, Person>
+  onEventClick?: (event: CalendarEvent) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const allDay  = events.filter(e => e.allDay)
@@ -195,14 +284,24 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
               const dayEvs = allDay.filter(e => e.start.slice(0, 10) <= ds && e.end.slice(0, 10) > ds)
               return (
                 <div key={ds} className="flex-1 px-0.5">
-                  {dayEvs.map(ev => (
-                    <div key={ev.id}
-                      className="mb-0.5 truncate rounded px-1 py-0.5 text-xs font-medium"
-                      style={{ background: ev.color + '33', color: ev.color, borderLeft: `2px solid ${ev.color}` }}
-                      title={`${ev.personName} – ${ev.title}`}>
-                      {ev.personName ? `${ev.personName} – ` : ''}{ev.title}
-                    </div>
-                  ))}
+                  {dayEvs.map(ev => {
+                    const accent     = tileAccent(ev)
+                    const multi      = ev.attendeePersonIds.length > 1
+                    return (
+                      <div key={ev.id}
+                        onClick={() => onEventClick?.(ev)}
+                        role={onEventClick ? 'button' : undefined}
+                        className={`relative mb-0.5 flex items-center truncate rounded px-1 py-0.5 text-xs font-medium ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+                        style={{ background: accent + '33', color: accent, borderLeft: `2px solid ${accent}` }}
+                        title={`${ev.personName} – ${ev.title}`}>
+                        {multi
+                          ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={12} />
+                          : (ev.personName ? <span className="truncate">{ev.personName} – </span> : null)}
+                        <span className="truncate">{ev.title}</span>
+                        <ResponsibilityBadge ids={ev.responsiblePersonIds} personById={personById} size={12} />
+                      </div>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -255,20 +354,27 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
                   const top    = (start.getHours() + start.getMinutes() / 60) * ROW_HEIGHT
                   const height = Math.max(((end.getTime() - start.getTime()) / 3_600_000) * ROW_HEIGHT, 20)
                   const pct    = 100 / ev.totalCols
+                  const accent = tileAccent(ev)
+                  const multi  = ev.attendeePersonIds.length > 1
                   return (
                     <div key={ev.id}
-                      className="absolute overflow-hidden rounded-md px-1.5 py-1 text-xs"
+                      onClick={() => onEventClick?.(ev)}
+                      role={onEventClick ? 'button' : undefined}
+                      className={`absolute overflow-hidden rounded-md px-1.5 py-1 text-xs ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
                       style={{
                         top, height,
                         left:       `calc(${ev.col * pct}% + 2px)`,
                         width:      `calc(${pct}% - 4px)`,
-                        background: ev.color + '33',
-                        borderLeft: `3px solid ${ev.color}`,
-                        color:      ev.color,
+                        background: accent + '33',
+                        borderLeft: `3px solid ${accent}`,
+                        color:      accent,
                       }}
                       title={`${ev.personName} – ${ev.title}`}>
-                      {ev.personName && <span className="font-bold">{ev.personName} – </span>}
+                      {multi
+                        ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={14} />
+                        : (ev.personName && <span className="font-bold">{ev.personName} – </span>)}
                       <span>{ev.title}</span>
+                      <ResponsibilityBadge ids={ev.responsiblePersonIds} personById={personById} size={14} />
                     </div>
                   )
                 })}
@@ -283,10 +389,12 @@ function TimeGrid({ days, events, now, todayStr, use24h }: {
 
 // ── Month grid ─────────────────────────────────────────────────
 
-function MonthView({ events, viewDate, todayStr }: {
-  events:   CalendarEvent[]
-  viewDate: Date
-  todayStr: string
+function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
+  events:        CalendarEvent[]
+  viewDate:      Date
+  todayStr:      string
+  personById:    Map<string, Person>
+  onEventClick?: (event: CalendarEvent) => void
 }) {
   const cells = useMemo(() => {
     // Build 6-week grid starting from the Monday of the week containing the 1st
@@ -342,14 +450,23 @@ function MonthView({ events, viewDate, todayStr }: {
               </div>
 
               <div className="space-y-0.5">
-                {unique.slice(0, 3).map(ev => (
-                  <div key={ev.id}
-                    className="truncate rounded px-1 py-0.5 text-xs leading-tight"
-                    style={{ background: ev.color + '28', color: ev.color, borderLeft: `2px solid ${ev.color}` }}
-                    title={`${ev.personName} – ${ev.title}`}>
-                    {ev.personName ? `${ev.personName.split(' ')[0]} – ` : ''}{ev.title}
-                  </div>
-                ))}
+                {unique.slice(0, 3).map(ev => {
+                  const accent = tileAccent(ev)
+                  const multi  = ev.attendeePersonIds.length > 1
+                  return (
+                    <div key={ev.id}
+                      onClick={() => onEventClick?.(ev)}
+                      role={onEventClick ? 'button' : undefined}
+                      className={`relative flex items-center truncate rounded px-1 py-0.5 text-xs leading-tight ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+                      style={{ background: accent + '28', color: accent, borderLeft: `2px solid ${accent}` }}
+                      title={`${ev.personName} – ${ev.title}`}>
+                      {multi
+                        ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={10} />
+                        : (ev.personName ? <span className="truncate">{ev.personName.split(' ')[0]} – </span> : null)}
+                      <span className="truncate">{ev.title}</span>
+                    </div>
+                  )
+                })}
                 {unique.length > 3 && (
                   <div className="pl-1 text-xs text-gray-600">+{unique.length - 3} more</div>
                 )}

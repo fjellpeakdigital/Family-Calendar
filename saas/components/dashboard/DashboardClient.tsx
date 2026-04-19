@@ -5,6 +5,7 @@ import { useConfig } from './ConfigProvider'
 import AdminPanel from './AdminPanel'
 import CalendarView from './CalendarView'
 import ChoresView from './ChoresView'
+import EventOverlayModal from './EventOverlayModal'
 import WeatherWidget from './WeatherWidget'
 import type { CalendarEvent, Plan } from '@/lib/supabase/types'
 export type { CalendarEvent }
@@ -42,6 +43,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   const [loadingCal, setLoadingCal] = useState(false)
   const [showAdmin, setShowAdmin]   = useState(false)
   const [portrait, setPortrait]     = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
 
   // Clock — runs client-side only, so now is always local time
   useEffect(() => {
@@ -187,6 +189,7 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
                 return next
               })}
               onGoToday={() => setViewDate(new Date())}
+              onEventClick={setSelectedEvent}
             />
           )}
           {page === 'chores' && now && (
@@ -214,6 +217,16 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
 
       {showAdmin && (
         <AdminPanel onClose={() => setShowAdmin(false)} userEmail={userEmail} familyPlan={familyPlan} theme={theme} />
+      )}
+
+      {selectedEvent && (
+        <EventOverlayModal
+          event={selectedEvent}
+          people={config.people}
+          use24h={config.settings?.use24h ?? false}
+          onClose={() => setSelectedEvent(null)}
+          onSaved={fetchEvents}
+        />
       )}
     </>
   )
