@@ -64,10 +64,24 @@ window.Auth = (() => {
   }
 
   // ── Authenticated Fetch ───────────────────────────────────
-  async function apiFetch(tok, url) {
+  // On 401, attempt one silent re-auth and retry. If that fails, surface
+  // the 401 via exception so the caller can decide to show the banner.
+  async function apiFetch(tok, url, options = {}, _retried = false) {
     const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${tok.access_token}` }
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${tok.access_token}`,
+      },
     });
+    if (resp.status === 401 && !_retried) {
+      const refreshed = await silentReauth(tok.email);
+      if (refreshed) {
+        const updated = getToken(tok.email);
+        if (updated) return apiFetch(updated, url, options, true);
+      }
+      throw new Error('TOKEN_EXPIRED');
+    }
     if (resp.status === 401) throw new Error('TOKEN_EXPIRED');
     return resp;
   }
@@ -189,18 +203,21 @@ window.Auth = (() => {
     });
   }
 
-  // Proactively refresh tokens expiring within 10 min
-  function startSilentRefreshLoop() {
-    setInterval(async () => {
-      for (const tok of getAllTokens()) {
-        if (!tok.email) continue;
-        const expiresIn = tok.expires_at - Date.now();
-        if (expiresIn > 0 && expiresIn < 10 * 60_000) {
-          await silentReauth(tok.email);
-        }
+  // Refresh any token expiring within 10 minutes. Shared by the periodic
+  // loop and the on-visibility-change / on-demand triggers.
+  async function refreshExpiringTokens(thresholdMs = 10 * 60_000) {
+    for (const tok of getAllTokens()) {
+      if (!tok.email) continue;
+      const expiresIn = tok.expires_at - Date.now();
+      if (expiresIn > 0 && expiresIn < thresholdMs) {
+        await silentReauth(tok.email);
       }
-      checkReauthNeeded();
-    }, 5 * 60_000);
+    }
+    checkReauthNeeded();
+  }
+
+  function startSilentRefreshLoop() {
+    setInterval(() => refreshExpiringTokens(), 5 * 60_000);
   }
 
   // ── Migration from old auth_token_N format ────────────────
@@ -343,7 +360,7 @@ window.Auth = (() => {
   }
 
   return {
-    init, signIn, silentReauth, clearToken, finishSetup,
+    init, signIn, silentReauth, refreshExpiringTokens, clearToken, finishSetup,
     getAllTokens, getValidTokens, isValid, anyConnected, apiFetch,
     renderAuthPills, checkReauthNeeded, renderSetupSplash,
   };

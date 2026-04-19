@@ -411,7 +411,11 @@ window.App = (() => {
     Chores.startMidnightReset();
 
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) renderPage(CONFIG.PAGES[_currentPage]);
+      if (document.hidden) return;
+      renderPage(CONFIG.PAGES[_currentPage]);
+      // Refresh any tokens about to expire so the first fetch after a
+      // return-from-sleep doesn't need to surface the reauth banner.
+      Auth.refreshExpiringTokens?.();
     });
   }
 
