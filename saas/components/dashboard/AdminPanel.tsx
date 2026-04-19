@@ -729,6 +729,21 @@ function SettingsTab({ config, saveConfig }: { config: ReturnType<typeof useConf
         </select>
       </label>
 
+      <label className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <span className="text-sm">Default reminder</span>
+        <select
+          value={s.defaultReminderOffsetMin ?? ''}
+          onChange={e => update({ defaultReminderOffsetMin: e.target.value === '' ? null : Number(e.target.value) })}
+          className="rounded-lg border border-white/10 bg-gray-900 px-2 py-1 text-sm"
+        >
+          <option value="">Off</option>
+          <option value="15">15 min before</option>
+          <option value="60">1 hour before</option>
+          <option value="240">4 hours before</option>
+          <option value="1440">1 day before</option>
+        </select>
+      </label>
+
       <IAmSection config={config} />
 
       <InviteSection />

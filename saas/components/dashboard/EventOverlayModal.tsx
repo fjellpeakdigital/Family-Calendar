@@ -20,6 +20,10 @@ export default function EventOverlayModal({ event, people, use24h, onClose, onSa
   const [attendees,   setAttendees]   = useState<string[]>(event.attendeePersonIds)
   const [responsible, setResponsible] = useState<string[]>(event.responsiblePersonIds)
   const [scope,       setScope]       = useState<Scope>(isRecurring ? 'series' : 'instance')
+  // '' means "use family default"; number means "this specific offset".
+  const [offsetStr,   setOffsetStr]   = useState<string>(
+    event.offsetMin == null ? '' : String(event.offsetMin)
+  )
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState<string | null>(null)
 
@@ -38,6 +42,7 @@ export default function EventOverlayModal({ event, people, use24h, onClose, onSa
   async function handleSave() {
     setSaving(true); setError(null)
     const key = scope === 'series' ? event.recurringEventId! : event.eventKey
+    const offsetMin = offsetStr === '' ? null : Number(offsetStr)
     const res = await fetch('/api/overlay', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -46,6 +51,7 @@ export default function EventOverlayModal({ event, people, use24h, onClose, onSa
         key,
         attendee_person_ids:    attendees,
         responsible_person_ids: responsible,
+        offset_min:             offsetMin,
       }),
     })
     setSaving(false)
@@ -114,6 +120,24 @@ export default function EventOverlayModal({ event, people, use24h, onClose, onSa
                   onToggle={() => setResponsible(l => toggle(l, p.id))}
                 />
               ))}
+          </Section>
+
+          <Section title="Reminder">
+            <select
+              value={offsetStr}
+              onChange={e => setOffsetStr(e.target.value)}
+              className="w-full rounded-md border border-white/10 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400/50"
+            >
+              <option value="">Use family default</option>
+              <option value="0">At event start</option>
+              <option value="15">15 min before</option>
+              <option value="60">1 hour before</option>
+              <option value="240">4 hours before</option>
+              <option value="1440">1 day before</option>
+            </select>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Emails the responsible adult(s) when the reminder lands.
+            </p>
           </Section>
 
           {isRecurring && (

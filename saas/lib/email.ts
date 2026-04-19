@@ -117,6 +117,66 @@ interface KidSummary {
   points:    number
 }
 
+// ── Event reminder ─────────────────────────────────────────────
+
+export interface EventReminderPayload {
+  to:         string
+  recipientName: string | null
+  title:      string
+  location:   string | null
+  startAt:    string   // ISO
+  use24h:     boolean
+}
+
+/**
+ * Low-detail reminder — keeps the email body minimal so sensitive
+ * schedule metadata stays behind the login-gated dashboard, not in
+ * the user's inbox.
+ */
+export async function sendEventReminderEmail(p: EventReminderPayload) {
+  if (!process.env.RESEND_API_KEY) return
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://familydash.app'
+  const when   = formatWhen(p.startAt, p.use24h)
+  const greeting = p.recipientName ? `Hey ${p.recipientName},` : 'Hey,'
+
+  const html = emailShell(`
+    <h1>You're up: ${escapeHtml(p.title)}</h1>
+    <p>${greeting} you're listed as responsible for this event.</p>
+    <div class="card">
+      <div class="row"><span class="label">Event</span><span class="val">${escapeHtml(p.title)}</span></div>
+      <div class="row"><span class="label">When</span><span class="val">${when}</span></div>
+      ${p.location ? `<div class="row"><span class="label">Where</span><span class="val">${escapeHtml(p.location)}</span></div>` : ''}
+    </div>
+    <a href="${appUrl}/dashboard" class="btn">Open dashboard →</a>
+    <p style="font-size:13px;color:#484F58;">Reassign, reschedule, or mute reminders from your FamilyDash.</p>
+  `)
+
+  await getResend().emails.send({
+    from:    FROM,
+    to:      p.to,
+    subject: `Reminder: ${p.title}`,
+    html,
+  })
+}
+
+function formatWhen(iso: string, use24h: boolean): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const h = d.getHours()
+  const m = String(d.getMinutes()).padStart(2, '0')
+  const time = use24h
+    ? `${String(h).padStart(2, '0')}:${m}`
+    : `${(h % 12) || 12}:${m} ${h >= 12 ? 'PM' : 'AM'}`
+  return `${date} · ${time}`
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c =>
+    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' :
+    c === '"' ? '&quot;' : '&#39;')
+}
+
 export async function sendWeeklySummaryEmail(to: string, kids: KidSummary[]) {
   if (!process.env.RESEND_API_KEY) return
 

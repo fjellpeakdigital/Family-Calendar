@@ -95,6 +95,7 @@ async function fetchCalendarEvents(
 interface GoogleCalendarItem {
   id: string
   summary?: string
+  location?: string
   start: { dateTime?: string; date?: string }
   end:   { dateTime?: string; date?: string }
   recurringEventId?: string
@@ -272,6 +273,7 @@ export async function fetchFamilyEvents(
       start:      (item.start.dateTime ?? item.start.date)!,
       end:        (item.end.dateTime   ?? item.end.date)!,
       allDay:     !item.start.dateTime,
+      location:   item.location ?? null,
       calendarId: assignment.calendarId,
       personId:   assignment.personId,
       personName: personMap.get(assignment.personId) ?? '',

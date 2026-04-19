@@ -83,10 +83,19 @@ function defaultConfig(): ConfigJson {
     people: [],
     chores: [],
     cal_assignments: [],
-    settings: { location: '', use24h: false, theme: 'dark', pin: '1234' },
+    settings: { location: '', use24h: false, theme: 'dark', pin: '1234', defaultReminderOffsetMin: null },
     rewards: {},
     points: {},
   }
+}
+
+/** Only accept plausible reminder offsets; anything else becomes null (off). */
+function sanitizeOffset(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null
+  if (n < 0 || n > 60 * 24) return null
+  return n
 }
 
 function sanitizeConfig(raw: unknown): ConfigJson {
@@ -107,6 +116,9 @@ function sanitizeConfig(raw: unknown): ConfigJson {
       pin: typeof r.settings === 'object' && r.settings !== null
         ? String((r.settings as Record<string, unknown>).pin ?? '1234')
         : '1234',
+      defaultReminderOffsetMin: sanitizeOffset(
+        (r.settings as Record<string, unknown> | null | undefined)?.defaultReminderOffsetMin
+      ),
     },
     rewards: typeof r.rewards === 'object' && r.rewards !== null
       ? r.rewards as Record<string, []>

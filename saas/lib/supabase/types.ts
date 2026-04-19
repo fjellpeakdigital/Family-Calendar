@@ -19,6 +19,7 @@ export interface CalendarEvent {
   start: string        // ISO datetime or date
   end: string
   allDay: boolean
+  location: string | null
   calendarId: string
   personId: string
   personName: string
@@ -194,6 +195,9 @@ export interface AppSettings {
   use24h: boolean
   theme: 'dark' | 'light'
   pin: string
+  /** Family-wide default reminder offset in minutes. Used when an event's
+   *  overlay has no offset. Null or missing → no reminders by default. */
+  defaultReminderOffsetMin?: number | null
 }
 
 export interface Reward {
