@@ -10,8 +10,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { CalAssignment, CalendarEvent, CalendarSourceProvider, ConfigJson, Person } from '@/lib/supabase/types'
-import { googleAdapter } from './google'
-import { icsAdapter }    from './ics'
+import { googleAdapter }    from './google'
+import { icsAdapter }       from './ics'
+import { microsoftAdapter } from './microsoft'
 import {
   assignmentProvider,
   computeEventKey,
@@ -23,7 +24,7 @@ import {
 const adapters: Record<CalendarSourceProvider, CalendarSourceAdapter | null> = {
   google:    googleAdapter,
   ics:       icsAdapter,
-  microsoft: null,       // Phase 4c
+  microsoft: microsoftAdapter,
   caldav:    null,       // deferred
 }
 

@@ -208,80 +208,126 @@ function PeopleTab({ config, saveConfig }: { config: ReturnType<typeof useConfig
 
 // ── Calendars Tab ─────────────────────────────────────────────
 
+type ConnectedAccount = { email: string; provider: 'google' | 'microsoft' }
+
+function calendarMapKey(a: ConnectedAccount): string {
+  return `${a.provider}:${a.email}`
+}
+
 function CalendarsTab({ config, saveConfig, userEmail, familyPlan }: {
   config: ReturnType<typeof useConfig>['config']
   saveConfig: ReturnType<typeof useConfig>['saveConfig']
   userEmail: string
   familyPlan: string
 }) {
-  const [accounts, setAccounts]   = useState<Array<{ email: string }>>([])
+  const [accounts, setAccounts]   = useState<ConnectedAccount[]>([])
   const [calendars, setCalendars] = useState<Record<string, Array<{ id: string; name: string; color: string }>>>({})
+  const outlookAllowed = familyPlan === 'family_plus'
 
   useEffect(() => {
     fetch('/api/account/connected')
       .then(r => r.json())
       .then(d => {
-        setAccounts(d.accounts ?? [])
-        d.accounts?.forEach((a: { email: string }) => {
-          fetch(`/api/account/calendars?email=${encodeURIComponent(a.email)}`)
+        const list = (d.accounts ?? []) as ConnectedAccount[]
+        setAccounts(list)
+        list.forEach(a => {
+          const key = calendarMapKey(a)
+          fetch(`/api/account/calendars?provider=${a.provider}&email=${encodeURIComponent(a.email)}`)
             .then(r => r.json())
-            .then(data => setCalendars(prev => ({ ...prev, [a.email]: data.calendars ?? [] })))
+            .then(data => setCalendars(prev => ({ ...prev, [key]: data.calendars ?? [] })))
         })
       })
   }, [])
 
-  function toggleAssignment(cal: { id: string; name: string; color: string }, accountEmail: string, personId: string) {
+  function toggleAssignment(
+    cal: { id: string; name: string; color: string },
+    account: ConnectedAccount,
+    personId: string
+  ) {
     const matches = (a: typeof config.cal_assignments[number]) =>
-      a.calendarId === cal.id && a.personId === personId && a.accountEmail === accountEmail
+      a.calendarId === cal.id &&
+      a.personId   === personId &&
+      a.accountEmail === account.email &&
+      (a.provider ?? 'google') === account.provider
     const exists = config.cal_assignments.find(matches)
     const updated = exists
       ? config.cal_assignments.filter(a => !matches(a))
-      : [...config.cal_assignments, { provider: 'google' as const, calendarId: cal.id, calendarName: cal.name, accountEmail, personId, color: cal.color }]
+      : [...config.cal_assignments, {
+          provider:     account.provider,
+          calendarId:   cal.id,
+          calendarName: cal.name,
+          accountEmail: account.email,
+          personId,
+          color:        cal.color,
+        }]
     saveConfig({ ...config, cal_assignments: updated })
   }
 
-  function disconnectAccount(email: string) {
-    fetch(`/api/account/connected?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
-    setAccounts(a => a.filter(x => x.email !== email))
-    saveConfig({ ...config, cal_assignments: config.cal_assignments.filter(a => a.accountEmail !== email) })
+  function disconnectAccount(account: ConnectedAccount) {
+    const params = new URLSearchParams({ provider: account.provider, email: account.email })
+    fetch(`/api/account/connected?${params}`, { method: 'DELETE' })
+    setAccounts(a => a.filter(x => !(x.email === account.email && x.provider === account.provider)))
+    saveConfig({
+      ...config,
+      cal_assignments: config.cal_assignments.filter(a =>
+        !(a.accountEmail === account.email && (a.provider ?? 'google') === account.provider)
+      ),
+    })
   }
 
   return (
     <div className="max-w-lg space-y-4">
       <h3 className="font-semibold text-white">Connected Accounts</h3>
 
-      {accounts.map(account => (
-        <div key={account.email} className="rounded-xl border border-white/10 bg-white/5">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <span className="text-sm font-medium">{account.email}</span>
-            <button onClick={() => disconnectAccount(account.email)} className="text-xs text-gray-600 hover:text-red-400">Disconnect</button>
-          </div>
-          <div className="p-3 space-y-2">
-            {(calendars[account.email] ?? []).map(cal => (
-              <div key={cal.id} className="rounded-lg border border-white/5 bg-white/3 p-2">
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: cal.color }} />
-                  <span className="text-xs font-medium">{cal.name}</span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {config.people.map(p => {
-                    const assigned = config.cal_assignments.some(a =>
-                      a.calendarId === cal.id && a.personId === p.id && a.accountEmail === account.email
-                    )
-                    return (
-                      <button key={p.id} onClick={() => toggleAssignment(cal, account.email, p.id)}
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold transition ${assigned ? 'text-white' : 'border border-white/15 text-gray-600 hover:text-white'}`}
-                        style={assigned ? { background: p.color } : {}}>
-                        {p.name}
-                      </button>
-                    )
-                  })}
-                </div>
+      {accounts.map(account => {
+        const key = calendarMapKey(account)
+        return (
+          <div key={key} className="rounded-xl border border-white/10 bg-white/5">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+                  style={{
+                    background: account.provider === 'microsoft' ? 'rgba(38,107,186,0.2)' : 'rgba(234,67,53,0.15)',
+                    color:      account.provider === 'microsoft' ? '#74b2ff' : '#f28b82',
+                  }}
+                >
+                  {account.provider === 'microsoft' ? 'Outlook' : 'Google'}
+                </span>
+                <span className="text-sm font-medium">{account.email}</span>
               </div>
-            ))}
+              <button onClick={() => disconnectAccount(account)} className="text-xs text-gray-600 hover:text-red-400">Disconnect</button>
+            </div>
+            <div className="p-3 space-y-2">
+              {(calendars[key] ?? []).map(cal => (
+                <div key={cal.id} className="rounded-lg border border-white/5 bg-white/3 p-2">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: cal.color }} />
+                    <span className="text-xs font-medium">{cal.name}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {config.people.map(p => {
+                      const assigned = config.cal_assignments.some(a =>
+                        a.calendarId === cal.id &&
+                        a.personId   === p.id &&
+                        a.accountEmail === account.email &&
+                        (a.provider ?? 'google') === account.provider
+                      )
+                      return (
+                        <button key={p.id} onClick={() => toggleAssignment(cal, account, p.id)}
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold transition ${assigned ? 'text-white' : 'border border-white/15 text-gray-600 hover:text-white'}`}
+                          style={assigned ? { background: p.color } : {}}>
+                          {p.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       <a
         href={`/api/auth/signin/google?callbackUrl=${encodeURIComponent('/dashboard')}`}
@@ -289,6 +335,20 @@ function CalendarsTab({ config, saveConfig, userEmail, familyPlan }: {
       >
         + Connect Google Account
       </a>
+
+      {outlookAllowed ? (
+        // eslint-disable-next-line @next/next/no-html-link-for-pages
+        <a
+          href="/api/auth/microsoft/start"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-sm text-gray-500 transition hover:text-gray-300"
+        >
+          + Connect Microsoft / Outlook
+        </a>
+      ) : (
+        <div className="rounded-xl border border-dashed border-white/10 py-2.5 text-center text-xs text-gray-600">
+          Outlook calendars are a <a href="/billing" className="underline">Family+</a> feature.
+        </div>
+      )}
 
       <IcsSection config={config} saveConfig={saveConfig} familyPlan={familyPlan} />
     </div>
