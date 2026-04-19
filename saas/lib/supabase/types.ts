@@ -183,9 +183,12 @@ export interface ChoreDefinition {
 }
 
 export interface CalAssignment {
-  calendarId: string
+  /** Provider this calendar lives in. Defaults to 'google' when missing
+   *  for backwards compatibility with assignments created before Phase 4. */
+  provider?: CalendarSourceProvider
+  calendarId: string       // google cal id, ICS URL, or provider-specific id
   calendarName: string
-  accountEmail: string
+  accountEmail?: string    // OAuth providers only (google, microsoft)
   personId: string
   color: string
 }

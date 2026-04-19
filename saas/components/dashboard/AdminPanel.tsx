@@ -126,7 +126,7 @@ export default function AdminPanel({ onClose, userEmail, familyPlan, theme }: Pr
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-6">
         {tab === 'people'    && <PeopleTab    config={config} saveConfig={saveConfig} />}
-        {tab === 'calendars' && <CalendarsTab config={config} saveConfig={saveConfig} userEmail={userEmail} />}
+        {tab === 'calendars' && <CalendarsTab config={config} saveConfig={saveConfig} userEmail={userEmail} familyPlan={familyPlan} />}
         {tab === 'chores'    && <ChoresTab    config={config} saveConfig={saveConfig} familyPlan={familyPlan} />}
         {tab === 'settings'  && <SettingsTab  config={config} saveConfig={saveConfig} />}
       </div>
@@ -208,10 +208,11 @@ function PeopleTab({ config, saveConfig }: { config: ReturnType<typeof useConfig
 
 // ── Calendars Tab ─────────────────────────────────────────────
 
-function CalendarsTab({ config, saveConfig, userEmail }: {
+function CalendarsTab({ config, saveConfig, userEmail, familyPlan }: {
   config: ReturnType<typeof useConfig>['config']
   saveConfig: ReturnType<typeof useConfig>['saveConfig']
   userEmail: string
+  familyPlan: string
 }) {
   const [accounts, setAccounts]   = useState<Array<{ email: string }>>([])
   const [calendars, setCalendars] = useState<Record<string, Array<{ id: string; name: string; color: string }>>>({})
@@ -230,10 +231,12 @@ function CalendarsTab({ config, saveConfig, userEmail }: {
   }, [])
 
   function toggleAssignment(cal: { id: string; name: string; color: string }, accountEmail: string, personId: string) {
-    const exists = config.cal_assignments.find(a => a.calendarId === cal.id && a.personId === personId)
+    const matches = (a: typeof config.cal_assignments[number]) =>
+      a.calendarId === cal.id && a.personId === personId && a.accountEmail === accountEmail
+    const exists = config.cal_assignments.find(matches)
     const updated = exists
-      ? config.cal_assignments.filter(a => !(a.calendarId === cal.id && a.personId === personId))
-      : [...config.cal_assignments, { calendarId: cal.id, calendarName: cal.name, accountEmail, personId, color: cal.color }]
+      ? config.cal_assignments.filter(a => !matches(a))
+      : [...config.cal_assignments, { provider: 'google' as const, calendarId: cal.id, calendarName: cal.name, accountEmail, personId, color: cal.color }]
     saveConfig({ ...config, cal_assignments: updated })
   }
 
@@ -262,7 +265,9 @@ function CalendarsTab({ config, saveConfig, userEmail }: {
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {config.people.map(p => {
-                    const assigned = config.cal_assignments.some(a => a.calendarId === cal.id && a.personId === p.id)
+                    const assigned = config.cal_assignments.some(a =>
+                      a.calendarId === cal.id && a.personId === p.id && a.accountEmail === account.email
+                    )
                     return (
                       <button key={p.id} onClick={() => toggleAssignment(cal, account.email, p.id)}
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold transition ${assigned ? 'text-white' : 'border border-white/15 text-gray-600 hover:text-white'}`}
@@ -284,6 +289,143 @@ function CalendarsTab({ config, saveConfig, userEmail }: {
       >
         + Connect Google Account
       </a>
+
+      <IcsSection config={config} saveConfig={saveConfig} familyPlan={familyPlan} />
+    </div>
+  )
+}
+
+// ── ICS Feeds ─────────────────────────────────────────────────
+
+const ICS_LIMIT: Record<string, number> = {
+  free:        0,
+  family:      1,
+  family_plus: 20,
+}
+
+function IcsSection({ config, saveConfig, familyPlan }: {
+  config:     ReturnType<typeof useConfig>['config']
+  saveConfig: ReturnType<typeof useConfig>['saveConfig']
+  familyPlan: string
+}) {
+  const limit = ICS_LIMIT[familyPlan] ?? 0
+  const feeds = config.cal_assignments.filter(a => a.provider === 'ics')
+
+  const [adding,    setAdding]    = useState(false)
+  const [name,      setName]      = useState('')
+  const [url,       setUrl]       = useState('')
+  const [personId,  setPersonId]  = useState<string>(config.people[0]?.id ?? '')
+  const [color,     setColor]     = useState(COLORS[0])
+  const [error,     setError]     = useState<string | null>(null)
+
+  function removeFeed(feedUrl: string) {
+    saveConfig({
+      ...config,
+      cal_assignments: config.cal_assignments.filter(a => !(a.provider === 'ics' && a.calendarId === feedUrl)),
+    })
+  }
+
+  function addFeed() {
+    setError(null)
+    if (!name.trim()) { setError('Give the feed a name.'); return }
+    if (!/^https?:\/\//i.test(url.trim())) { setError('URL must start with http:// or https://'); return }
+    if (!personId) { setError('Pick a person.'); return }
+    if (feeds.some(f => f.calendarId === url.trim())) { setError('Already added.'); return }
+
+    saveConfig({
+      ...config,
+      cal_assignments: [
+        ...config.cal_assignments,
+        {
+          provider:     'ics',
+          calendarId:   url.trim(),
+          calendarName: name.trim(),
+          personId,
+          color,
+        },
+      ],
+    })
+    setName(''); setUrl(''); setAdding(false)
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex items-end justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Feeds (ICS / subscribe URLs)</h3>
+          <p className="text-xs text-gray-500">
+            Paste a calendar subscription URL from a school, sports league, or any service that offers one.
+          </p>
+        </div>
+        <span className="text-[11px] text-gray-600">
+          {feeds.length}/{limit === 20 ? '∞' : limit}
+        </span>
+      </div>
+
+      {feeds.length > 0 && (
+        <div className="space-y-2">
+          {feeds.map(f => {
+            const person = config.people.find(p => p.id === f.personId)
+            return (
+              <div key={f.calendarId} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: f.color }} />
+                      <span className="truncate text-sm font-medium">{f.calendarName}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[11px] text-gray-500">{f.calendarId}</div>
+                    {person && (
+                      <div className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                        style={{ background: person.color }}>
+                        Default: {person.name}
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={() => removeFeed(f.calendarId)}
+                    className="text-xs text-gray-600 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {feeds.length >= limit ? (
+        limit === 0
+          ? <p className="text-[11px] text-gray-500">Upgrade to Family to add a calendar feed.</p>
+          : <p className="text-[11px] text-gray-500">Upgrade to Family+ for unlimited feeds.</p>
+      ) : adding ? (
+        <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Feed name (e.g. School calendar)"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-blue-500/50" />
+          <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/calendar.ics"
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-blue-500/50" />
+          <div className="flex items-center gap-2">
+            <select value={personId} onChange={e => setPersonId(e.target.value)}
+              className="flex-1 rounded-lg border border-white/10 bg-gray-900 px-2 py-2 text-sm">
+              {config.people.map(p => <option key={p.id} value={p.id}>Default person: {p.name}</option>)}
+            </select>
+            <div className="relative">
+              <div className="h-9 w-9 rounded-lg border border-white/10" style={{ background: color }} />
+              <input type="color" value={color} onChange={e => setColor(e.target.value)}
+                className="absolute inset-0 cursor-pointer opacity-0" />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setAdding(false); setError(null) }}
+              className="rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:bg-white/5 hover:text-white">Cancel</button>
+            <button onClick={addFeed}
+              className="rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-500/30">Add feed</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 py-2.5 text-sm text-gray-500 transition hover:text-gray-300">
+          + Add a calendar URL
+        </button>
+      )}
     </div>
   )
 }

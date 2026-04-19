@@ -54,17 +54,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ events: [] })
   }
 
-  const cfg = config.config_json as {
-    cal_assignments: Array<{
-      calendarId: string
-      accountEmail: string
-      personId: string
-      color: string
-    }>
-    people: Array<{ id: string; name: string }>
-  }
+  const cfg = config.config_json as import('@/lib/supabase/types').ConfigJson
 
-  // Fetch events from Google — never stored, returned directly
+  // Fetch events across every configured source (Google + ICS). Never
+  // stored — returned directly to the caller.
   const events = await fetchFamilyEvents(user.family_id, timeMin, timeMax, cfg)
 
   // No caching — events are always fresh
