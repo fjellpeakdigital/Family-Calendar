@@ -2717,3 +2717,31 @@ html[data-kid-mode="true"] .reward-claim-btn {
 .cal-month-cell:hover {
   border-color: rgba(88,166,255,0.25);
 }
+
+/* ──────────────────────────────────────────────────────────
+   Admin — Backup section
+   ────────────────────────────────────────────────────────── */
+.backup-grid label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.backup-grid .btn {
+  justify-self: start;
+}
+.backup-msg {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.backup-msg.ok {
+  color: var(--success);
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+.backup-msg.err {
+  color: var(--danger);
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}

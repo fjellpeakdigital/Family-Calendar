@@ -938,6 +938,22 @@ window.Admin = (() => {
         </div>
       </div>
 
+      <div class="admin-section">
+        <h3>Backup</h3>
+        <p class="admin-hint">
+          Export saves everything except Google sign-in tokens to a JSON file.
+          Import replaces current data — export first if you want a rollback.
+        </p>
+        <div class="settings-grid backup-grid">
+          <label>Export data</label>
+          <button type="button" class="btn btn-sm btn-outline" id="s-export">Download backup.json</button>
+          <label>Import data</label>
+          <button type="button" class="btn btn-sm btn-outline" id="s-import">Choose file…</button>
+        </div>
+        <input type="file" id="s-import-file" accept="application/json,.json" style="display:none" />
+        <div id="s-backup-msg" class="backup-msg" style="display:none"></div>
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-primary" id="settings-save-btn">Save Settings</button>
       </div>
@@ -978,6 +994,116 @@ window.Admin = (() => {
       msg.style.display = 'block';
       setTimeout(() => { msg.style.display = 'none'; }, 2000);
     });
+
+    // ── Export / Import ──────────────────────────────────────
+    document.getElementById('s-export').addEventListener('click', doExport);
+    document.getElementById('s-import').addEventListener('click', () => {
+      document.getElementById('s-import-file').click();
+    });
+    document.getElementById('s-import-file').addEventListener('change', doImport);
+  }
+
+  // Keys we back up. Auth tokens (fd_tok_*) and ephemeral chore-state keys
+  // (fd_chore_YYYY-MM-DD) are handled separately.
+  const BACKUP_KEYS = [
+    'fd_people', 'fd_chore_data', 'fd_bonus_chores',
+    'fd_points', 'fd_rewards', 'fd_streaks',
+    'fd_cal_assignments', 'fd_cal_hidden_people',
+    'fd_settings', 'fd_pin',
+  ];
+
+  function doExport() {
+    const payload = {
+      version:    1,
+      exportedAt: new Date().toISOString(),
+      data:       {},
+      choreState: {},
+    };
+    BACKUP_KEYS.forEach(k => {
+      const v = localStorage.getItem(k);
+      if (v !== null) {
+        try { payload.data[k] = JSON.parse(v); }
+        catch { payload.data[k] = v; }
+      }
+    });
+    // Per-day completion state (up to 8 days kept by saveState prune)
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('fd_chore_')) continue;
+      if (key === 'fd_chore_data') continue;
+      try { payload.choreState[key] = JSON.parse(localStorage.getItem(key)); }
+      catch {}
+    }
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href     = url;
+    a.download = `family-dashboard-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    flashBackupMsg('✓ Backup downloaded', 'ok');
+  }
+
+  async function doImport(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    let parsed;
+    try {
+      const text = await file.text();
+      parsed = JSON.parse(text);
+    } catch (err) {
+      flashBackupMsg(`Could not parse file: ${err.message}`, 'err');
+      return;
+    }
+
+    if (!parsed || typeof parsed !== 'object' || !parsed.data) {
+      flashBackupMsg('File does not look like a dashboard backup.', 'err');
+      return;
+    }
+
+    const summary = Object.keys(parsed.data).length;
+    const days    = parsed.choreState ? Object.keys(parsed.choreState).length : 0;
+    if (!confirm(
+      `Import ${summary} data keys${days ? ` + ${days} days of chore history` : ''}?\n\n` +
+      `This replaces current data on this device. Google sign-in tokens are not affected.`
+    )) return;
+
+    // Clear existing backup keys first so deletions in the backup take effect.
+    BACKUP_KEYS.forEach(k => localStorage.removeItem(k));
+    // Also clear existing per-day state keys.
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('fd_chore_') && key !== 'fd_chore_data') {
+        localStorage.removeItem(key);
+      }
+    }
+
+    // Write imported data
+    Object.entries(parsed.data).forEach(([k, v]) => {
+      localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+    });
+    Object.entries(parsed.choreState || {}).forEach(([k, v]) => {
+      localStorage.setItem(k, JSON.stringify(v));
+    });
+
+    flashBackupMsg('✓ Imported. Reloading…', 'ok');
+    setTimeout(() => window.location.reload(), 900);
+  }
+
+  function flashBackupMsg(text, kind) {
+    const el = document.getElementById('s-backup-msg');
+    if (!el) return;
+    el.textContent = text;
+    el.className = `backup-msg ${kind}`;
+    el.style.display = 'block';
+    clearTimeout(flashBackupMsg._t);
+    flashBackupMsg._t = setTimeout(() => { el.style.display = 'none'; }, 3000);
   }
 
   return { init, openAdmin, closeAdmin, switchTab, pinKey };
