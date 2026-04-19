@@ -20,7 +20,7 @@ export default async function DashboardPage() {
 
   const { data: user } = await supabase
     .from('users')
-    .select('family_id, name, role')
+    .select('family_id, name, role, person_id')
     .eq('email', email)
     .single()
 
@@ -44,11 +44,24 @@ export default async function DashboardPage() {
   // No people configured yet — go to onboarding
   if (config.people.length === 0) redirect('/onboarding')
 
+  // Auto-link: if the user has no person_id and there's exactly one adult,
+  // link them. Saves onboarding friction for single-parent setups and also
+  // self-heals existing accounts that pre-date the person_id column.
+  let userPersonId: string | null = user.person_id ?? null
+  if (!userPersonId) {
+    const adults = config.people.filter(p => p.type === 'adult')
+    if (adults.length === 1) {
+      userPersonId = adults[0].id
+      await supabase.from('users').update({ person_id: userPersonId }).eq('email', email)
+    }
+  }
+
   return (
     <ConfigProvider initialConfig={config} familyId={user.family_id}>
       <DashboardClient
         userEmail={email}
         userName={user.name ?? null}
+        userPersonId={userPersonId}
         familyPlan={familyPlan}
       />
     </ConfigProvider>

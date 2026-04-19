@@ -543,6 +543,86 @@ function RewardsSection({ kid, rewards, onAdd, onRemove }: {
   )
 }
 
+// ── I Am Section — link signed-in user to a Person record ────
+
+function IAmSection({ config }: { config: ReturnType<typeof useConfig>['config'] }) {
+  const [personId, setPersonId] = useState<string | null>(null)
+  const [loaded, setLoaded]     = useState(false)
+  const [status, setStatus]     = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  const adults = config.people.filter(p => p.type === 'adult')
+
+  useEffect(() => {
+    fetch('/api/account/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        setPersonId((d?.user?.person_id as string | null | undefined) ?? null)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+  }, [])
+
+  async function save(next: string | null) {
+    setStatus('saving')
+    const res = await fetch('/api/account/me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ person_id: next }),
+    })
+    if (res.ok) {
+      setPersonId(next)
+      setStatus('saved')
+      setTimeout(() => setStatus('idle'), 1500)
+    } else {
+      setStatus('error')
+    }
+  }
+
+  if (!loaded) return null
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">I am</p>
+      <p className="text-xs text-gray-500">
+        Pick which family member you are. Powers the &ldquo;Mine&rdquo; filter on the calendar
+        and will drive personal reminders.
+      </p>
+      {adults.length === 0 ? (
+        <p className="text-xs text-gray-500">
+          Add at least one adult on the <strong>People</strong> tab first.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {adults.map(p => {
+            const selected = personId === p.id
+            return (
+              <button
+                key={p.id}
+                onClick={() => save(selected ? null : p.id)}
+                className={`flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                  selected ? 'text-white ring-2 ring-white/60' : 'border border-white/15 text-gray-400 hover:text-white'
+                }`}
+                style={selected ? { background: p.color } : {}}
+              >
+                <span
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                  style={{ background: p.color }}
+                >
+                  {p.name.charAt(0).toUpperCase()}
+                </span>
+                {p.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {status === 'saving' && <p className="text-xs text-gray-500">Saving…</p>}
+      {status === 'saved'  && <p className="text-xs text-green-400">Saved!</p>}
+      {status === 'error'  && <p className="text-xs text-red-400">Couldn&rsquo;t save. Try again.</p>}
+    </div>
+  )
+}
+
 // ── Invite Section ────────────────────────────────────────────
 
 function InviteSection() {
@@ -648,6 +728,8 @@ function SettingsTab({ config, saveConfig }: { config: ReturnType<typeof useConf
           <option value="light">Light</option>
         </select>
       </label>
+
+      <IAmSection config={config} />
 
       <InviteSection />
 

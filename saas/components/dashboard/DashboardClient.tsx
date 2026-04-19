@@ -11,9 +11,10 @@ import type { CalendarEvent, Plan } from '@/lib/supabase/types'
 export type { CalendarEvent }
 
 interface Props {
-  userEmail:  string
-  userName:   string | null
-  familyPlan: Plan
+  userEmail:     string
+  userName:      string | null
+  userPersonId:  string | null
+  familyPlan:    Plan
 }
 
 const PAGES = ['calendar', 'chores'] as const
@@ -30,7 +31,7 @@ function localDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export default function DashboardClient({ userEmail, userName, familyPlan }: Props) {
+export default function DashboardClient({ userEmail, userName, userPersonId, familyPlan }: Props) {
   const { config, setConfig } = useConfig()
   const [page, setPage]             = useState<Page>('calendar')
   // Start null so the clock/date always come from the client (avoids UTC mismatch during SSR)
@@ -44,6 +45,17 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
   const [showAdmin, setShowAdmin]   = useState(false)
   const [portrait, setPortrait]     = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [mineOnly, setMineOnly]     = useState(false)
+
+  // Events visible to CalendarView. When Mine is on and we know which
+  // person the user is, keep only events where the user is responsible
+  // or attending.
+  const visibleEvents = mineOnly && userPersonId
+    ? events.filter(e =>
+        e.responsiblePersonIds.includes(userPersonId) ||
+        e.attendeePersonIds.includes(userPersonId)
+      )
+    : events
 
   // Clock — runs client-side only, so now is always local time
   useEffect(() => {
@@ -176,10 +188,13 @@ export default function DashboardClient({ userEmail, userName, familyPlan }: Pro
         <main className="flex-1 overflow-hidden">
           {page === 'calendar' && now && (
             <CalendarView
-              events={events} people={config.people} loading={loadingCal}
+              events={visibleEvents} people={config.people} loading={loadingCal}
               now={now} use24h={config.settings?.use24h ?? false}
               calView={calView} viewDate={viewDate}
               portrait={portrait}
+              mineOnly={mineOnly}
+              mineAvailable={!!userPersonId}
+              onToggleMine={() => setMineOnly(v => !v)}
               onViewChange={v => { setCalView(v); if (v === 'today') setViewDate(new Date()) }}
               onNavigate={dir => setViewDate(d => {
                 const next = new Date(d)

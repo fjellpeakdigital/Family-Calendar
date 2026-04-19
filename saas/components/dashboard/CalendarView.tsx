@@ -14,6 +14,9 @@ interface Props {
   calView:       CalView
   viewDate:      Date
   portrait:      boolean
+  mineOnly:      boolean
+  mineAvailable: boolean
+  onToggleMine:  () => void
   onViewChange:  (v: CalView) => void
   onNavigate:    (dir: -1 | 1) => void
   onGoToday:     () => void
@@ -176,7 +179,7 @@ function layoutDayEvents(events: CalendarEvent[]) {
 
 // ── Root component ─────────────────────────────────────────────
 
-export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, onViewChange, onNavigate, onGoToday, onEventClick }: Props) {
+export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, mineOnly, mineAvailable, onToggleMine, onViewChange, onNavigate, onGoToday, onEventClick }: Props) {
   const todayStr = isoDate(now)
   const personById = useMemo(
     () => new Map(people.map(p => [p.id, p] as const)),
@@ -199,19 +202,35 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
           <span className="ml-3 text-sm font-semibold text-white">{viewTitle(calView, viewDate)}</span>
         </div>
 
-        {/* Hide week/month tabs in portrait — single-day is the only usable view */}
-        {!portrait && (
-          <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
-            {(['today', 'week', 'month'] as CalView[]).map(v => (
-              <button key={v} onClick={() => onViewChange(v)}
-                className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
-                  calView === v ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-gray-500 hover:text-white'
-                }`}>
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {mineAvailable && (
+            <button
+              onClick={onToggleMine}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                mineOnly
+                  ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/40'
+                  : 'text-gray-500 hover:bg-white/5 hover:text-white'
+              }`}
+              title={mineOnly ? 'Showing only events that involve you' : 'Show only events that involve you'}
+            >
+              Mine
+            </button>
+          )}
+
+          {/* Hide week/month tabs in portrait — single-day is the only usable view */}
+          {!portrait && (
+            <div className="flex gap-0.5 rounded-lg border border-white/10 p-0.5">
+              {(['today', 'week', 'month'] as CalView[]).map(v => (
+                <button key={v} onClick={() => onViewChange(v)}
+                  className={`rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
+                    calView === v ? 'bg-white/15 text-white ring-1 ring-white/20' : 'text-gray-500 hover:text-white'
+                  }`}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {loading && (
