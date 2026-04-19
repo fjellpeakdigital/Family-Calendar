@@ -105,7 +105,7 @@ export const googleAdapter: CalendarSourceAdapter = {
     if (!accountEmail) return []
 
     const supabase = await createClient()
-    const { data: tok } = await supabase
+    const { data: tok, error: tokErr } = await supabase
       .from('oauth_tokens')
       .select('*')
       .eq('family_id', ctx.familyId)
@@ -113,26 +113,38 @@ export const googleAdapter: CalendarSourceAdapter = {
       .eq('account_email', accountEmail)
       .maybeSingle()
 
-    if (!tok) return []
+    if (tokErr) {
+      console.error(`[google] token lookup failed (${accountEmail}):`, tokErr.message)
+      return []
+    }
+    if (!tok) {
+      console.warn(`[google] no oauth_tokens row for ${accountEmail} — user may need to reconnect`)
+      return []
+    }
 
     let accessToken: string
     try {
       accessToken = await getAccessToken(tok as OAuthToken)
-    } catch {
+    } catch (err) {
+      console.error(`[google] access-token acquisition failed (${accountEmail}):`, err)
       return []
     }
 
-    const items = await fetchOne(accessToken, ctx.assignment.calendarId, ctx.timeMin, ctx.timeMax)
-
-    return items.map<RawEvent>(item => ({
-      sourceId:         item.id,
-      title:            item.summary ?? '(No title)',
-      start:            (item.start.dateTime ?? item.start.date)!,
-      end:              (item.end.dateTime   ?? item.end.date)!,
-      allDay:           !item.start.dateTime,
-      location:         item.location ?? null,
-      recurringEventId: item.recurringEventId ?? null,
-      originalStart:    item.originalStartTime?.dateTime ?? item.originalStartTime?.date ?? null,
-    }))
+    try {
+      const items = await fetchOne(accessToken, ctx.assignment.calendarId, ctx.timeMin, ctx.timeMax)
+      return items.map<RawEvent>(item => ({
+        sourceId:         item.id,
+        title:            item.summary ?? '(No title)',
+        start:            (item.start.dateTime ?? item.start.date)!,
+        end:              (item.end.dateTime   ?? item.end.date)!,
+        allDay:           !item.start.dateTime,
+        location:         item.location ?? null,
+        recurringEventId: item.recurringEventId ?? null,
+        originalStart:    item.originalStartTime?.dateTime ?? item.originalStartTime?.date ?? null,
+      }))
+    } catch (err) {
+      console.error(`[google] events fetch failed for calendar ${ctx.assignment.calendarId}:`, err)
+      return []
+    }
   },
 }

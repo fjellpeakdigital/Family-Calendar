@@ -50,11 +50,15 @@ export async function fetchFamilyEvents(
     assignments.map(async (assignment) => {
       const provider = assignmentProvider(assignment)
       const adapter  = adapters[provider]
-      if (!adapter) return { assignment, provider, events: [] }
+      if (!adapter) {
+        console.warn(`[calendar] no adapter registered for provider=${provider} (calendar ${assignment.calendarId})`)
+        return { assignment, provider, events: [] }
+      }
       try {
         const events = await adapter.fetchRaw({ familyId, timeMin, timeMax, assignment })
         return { assignment, provider, events }
-      } catch {
+      } catch (err) {
+        console.error(`[calendar] adapter ${provider} threw for calendar ${assignment.calendarId}:`, err)
         return { assignment, provider, events: [] }
       }
     })
