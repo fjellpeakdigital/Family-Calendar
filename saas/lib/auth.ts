@@ -1,16 +1,18 @@
 import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
 import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id'
+import Resend from 'next-auth/providers/resend'
 import { createAdminClient } from '@/lib/supabase/server'
 import { encryptToken } from '@/lib/crypto'
-import { sendWelcomeEmail } from '@/lib/email'
 import { MS_SCOPES } from '@/lib/microsoft'
+import { createAuthAdapter } from '@/lib/auth-adapter'
 
 type DbProvider = 'google' | 'microsoft'
 
 /**
  * Map a NextAuth provider id to the short name we store on
- * oauth_tokens.provider.
+ * oauth_tokens.provider. Returns null for providers that don't
+ * carry an OAuth access token (email magic link).
  */
 function dbProvider(nextAuthId: string): DbProvider | null {
   if (nextAuthId === 'google')             return 'google'
@@ -19,6 +21,13 @@ function dbProvider(nextAuthId: string): DbProvider | null {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Adapter is used only for:
+  //   • email magic-link verification token storage
+  //   • user / family row creation on first sign-in (any provider)
+  // Session tokens remain JWT (see session.strategy below) — the
+  // adapter's session methods are never invoked.
+  adapter: createAuthAdapter(),
+
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -46,6 +55,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
       },
     }),
+    Resend({
+      apiKey: process.env.RESEND_API_KEY!,
+      from:   process.env.EMAIL_FROM ?? 'FamilyDash <noreply@familydash.app>',
+    }),
   ],
 
   // Sessions as httpOnly cookies — tokens never touch the client
@@ -55,70 +68,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (!account || !user.email) return false
 
+      // The email magic-link flow carries no OAuth access token, so
+      // we only need to make sure the user row exists (the adapter
+      // has already done that via createUser).
       const provider = dbProvider(account.provider)
-      if (!provider) return false
+      if (!provider) return true
 
+      if (!account.access_token) return true
+
+      // Persist the provider's OAuth tokens so lib/calendar-sources
+      // can fetch that account's calendars going forward. The user
+      // row was already created by the adapter before this callback
+      // runs; we just need the family_id to scope the token row.
       const supabase = createAdminClient()
-
-      // Find or create the user + family. Email is the linkage key;
-      // allowDangerousEmailAccountLinking on both providers means the
-      // same email signing in through either provider lands on the
-      // same row here.
-      const { data: existingUser } = await supabase
+      const { data: dbUser } = await supabase
         .from('users')
-        .select('id, family_id')
+        .select('family_id')
         .eq('email', user.email)
         .single()
+      if (!dbUser) return false
 
-      let familyId: string
-
-      if (existingUser) {
-        familyId = existingUser.family_id
-      } else {
-        const { data: family, error: familyError } = await supabase
-          .from('families')
-          .insert({ plan: 'free' })
-          .select('id')
-          .single()
-
-        if (familyError || !family) return false
-        familyId = family.id
-
-        await supabase.from('users').insert({
-          family_id: familyId,
-          email:     user.email,
-          name:      user.name ?? null,
-          role:      'owner',
-        })
-
-        // Welcome email is best-effort — never block sign-in on it.
-        sendWelcomeEmail(user.email, user.name ?? null).catch(() => {})
-      }
-
-      // Encrypt and upsert the OAuth tokens for whichever provider the
-      // user signed in with. The composite (family_id, provider,
-      // account_email) key lets Google + Microsoft coexist.
-      if (account.access_token) {
-        const encryptedAccess  = encryptToken(account.access_token)
-        const encryptedRefresh = account.refresh_token
-          ? encryptToken(account.refresh_token)
-          : null
-
-        await supabase.from('oauth_tokens').upsert(
-          {
-            family_id:         familyId,
-            provider,
-            account_email:     user.email,
-            access_token_enc:  encryptedAccess,
-            refresh_token_enc: encryptedRefresh,
-            expires_at:        account.expires_at
-              ? new Date(account.expires_at * 1000).toISOString()
-              : null,
-            scopes:            account.scope ?? null,
-          },
-          { onConflict: 'family_id,provider,account_email' }
-        )
-      }
+      await supabase.from('oauth_tokens').upsert(
+        {
+          family_id:         dbUser.family_id,
+          provider,
+          account_email:     user.email,
+          access_token_enc:  encryptToken(account.access_token),
+          refresh_token_enc: account.refresh_token
+            ? encryptToken(account.refresh_token)
+            : null,
+          expires_at:        account.expires_at
+            ? new Date(account.expires_at * 1000).toISOString()
+            : null,
+          scopes:            account.scope ?? null,
+        },
+        { onConflict: 'family_id,provider,account_email' },
+      )
 
       return true
     },
