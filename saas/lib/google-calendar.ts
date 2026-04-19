@@ -1,20 +1,10 @@
 import { decryptToken } from '@/lib/crypto'
 import { createClient } from '@/lib/supabase/server'
-import type { OAuthToken } from '@/lib/supabase/types'
+import type { CalendarEvent, OAuthToken } from '@/lib/supabase/types'
+
+export type { CalendarEvent }
 
 const CALENDAR_BASE = 'https://www.googleapis.com/calendar/v3'
-
-export interface CalendarEvent {
-  id: string
-  title: string
-  start: string        // ISO datetime or date
-  end: string
-  allDay: boolean
-  calendarId: string
-  personId: string
-  personName: string
-  color: string
-}
 
 /**
  * Get a valid access token for a given account, refreshing if expired.
@@ -107,6 +97,26 @@ interface GoogleCalendarItem {
   summary?: string
   start: { dateTime?: string; date?: string }
   end:   { dateTime?: string; date?: string }
+  recurringEventId?: string
+  originalStartTime?: { dateTime?: string; date?: string }
+}
+
+/**
+ * Stable lookup key for overlay data. For recurring instances we key by
+ * recurringId|originalStart so the assignment survives Google re-id'ing
+ * the specific instance when a series is edited.
+ */
+function computeEventKey(item: GoogleCalendarItem): string {
+  if (item.recurringEventId) {
+    const originalStart =
+      item.originalStartTime?.dateTime ??
+      item.originalStartTime?.date ??
+      item.start.dateTime ??
+      item.start.date ??
+      ''
+    return `${item.recurringEventId}|${originalStart}`
+  }
+  return item.id
 }
 
 /**
@@ -145,7 +155,14 @@ export async function fetchFamilyEvents(
     configJson.people.map(p => [p.id, p.name])
   )
 
-  const events: CalendarEvent[] = []
+  // Raw items collected before overlay merge. We need every event_key
+  // and recurringEventId in hand before querying the overlay tables.
+  type RawEvent = {
+    item: GoogleCalendarItem
+    assignment: typeof configJson.cal_assignments[number]
+    eventKey: string
+  }
+  const raw: RawEvent[] = []
 
   // Process assignments grouped by account to minimize token decryptions
   const byAccount = new Map<string, typeof configJson.cal_assignments>()
@@ -176,20 +193,8 @@ export async function fetchFamilyEvents(
               timeMin,
               timeMax
             )
-
             for (const item of data.items ?? []) {
-              const allDay = !item.start.dateTime
-              events.push({
-                id: item.id,
-                title: item.summary ?? '(No title)',
-                start: (item.start.dateTime ?? item.start.date)!,
-                end:   (item.end.dateTime   ?? item.end.date)!,
-                allDay,
-                calendarId: assignment.calendarId,
-                personId:   assignment.personId,
-                personName: personMap.get(assignment.personId) ?? '',
-                color:      assignment.color,
-              })
+              raw.push({ item, assignment, eventKey: computeEventKey(item) })
             }
           } catch {
             // Individual calendar failure — skip, don't abort all
@@ -198,6 +203,86 @@ export async function fetchFamilyEvents(
       )
     })
   )
+
+  // ── Batch-fetch overlay rows covering every event we just pulled ──
+  const eventKeys = Array.from(new Set(raw.map(r => r.eventKey)))
+  const seriesIds = Array.from(new Set(
+    raw.map(r => r.item.recurringEventId).filter((x): x is string => !!x)
+  ))
+
+  const [instanceRowsRes, seriesRowsRes] = await Promise.all([
+    eventKeys.length
+      ? supabase
+          .from('event_instance_overlay')
+          .select('event_key, attendee_person_ids, responsible_person_ids, offset_min')
+          .eq('family_id', familyId)
+          .in('event_key', eventKeys)
+      : Promise.resolve({ data: [] }),
+    seriesIds.length
+      ? supabase
+          .from('event_series_overlay')
+          .select('recurring_event_id, attendee_person_ids, responsible_person_ids, default_offset_min')
+          .eq('family_id', familyId)
+          .in('recurring_event_id', seriesIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  type InstanceRow = {
+    event_key: string
+    attendee_person_ids: string[]
+    responsible_person_ids: string[]
+    offset_min: number | null
+  }
+  type SeriesRow = {
+    recurring_event_id: string
+    attendee_person_ids: string[]
+    responsible_person_ids: string[]
+    default_offset_min: number | null
+  }
+  const instanceMap = new Map<string, InstanceRow>(
+    ((instanceRowsRes.data ?? []) as InstanceRow[]).map(r => [r.event_key, r])
+  )
+  const seriesMap = new Map<string, SeriesRow>(
+    ((seriesRowsRes.data ?? []) as SeriesRow[]).map(r => [r.recurring_event_id, r])
+  )
+
+  // ── Merge: instance > series > calendar default ──
+  const events: CalendarEvent[] = raw.map(({ item, assignment, eventKey }) => {
+    const inst   = instanceMap.get(eventKey)
+    const series = item.recurringEventId ? seriesMap.get(item.recurringEventId) : undefined
+
+    const attendeePersonIds =
+      inst?.attendee_person_ids?.length    ? inst.attendee_person_ids    :
+      series?.attendee_person_ids?.length  ? series.attendee_person_ids  :
+      [assignment.personId]
+
+    const responsiblePersonIds =
+      inst?.responsible_person_ids?.length   ? inst.responsible_person_ids   :
+      series?.responsible_person_ids?.length ? series.responsible_person_ids :
+      []
+
+    const offsetMin =
+      inst?.offset_min ??
+      series?.default_offset_min ??
+      null
+
+    return {
+      id:         item.id,
+      title:      item.summary ?? '(No title)',
+      start:      (item.start.dateTime ?? item.start.date)!,
+      end:        (item.end.dateTime   ?? item.end.date)!,
+      allDay:     !item.start.dateTime,
+      calendarId: assignment.calendarId,
+      personId:   assignment.personId,
+      personName: personMap.get(assignment.personId) ?? '',
+      color:      assignment.color,
+      recurringEventId: item.recurringEventId ?? null,
+      eventKey,
+      attendeePersonIds,
+      responsiblePersonIds,
+      offsetMin,
+    }
+  })
 
   return events
 }

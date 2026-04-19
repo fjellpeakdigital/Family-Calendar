@@ -9,6 +9,27 @@ export type Period = 'morning' | 'afternoon' | 'evening' | 'anytime'
 export type CalendarSourceProvider = 'google' | 'microsoft' | 'ics' | 'caldav'
 export type ReminderChannel = 'email' | 'push'
 
+/**
+ * Calendar event returned to the client after overlay merge.
+ * Shared between server (lib/google-calendar.ts) and client components.
+ */
+export interface CalendarEvent {
+  id: string
+  title: string
+  start: string        // ISO datetime or date
+  end: string
+  allDay: boolean
+  calendarId: string
+  personId: string
+  personName: string
+  color: string
+  recurringEventId: string | null
+  eventKey: string                 // overlay lookup key
+  attendeePersonIds:    string[]
+  responsiblePersonIds: string[]
+  offsetMin:            number | null
+}
+
 export interface Database {
   public: {
     PostgrestVersion: "12"

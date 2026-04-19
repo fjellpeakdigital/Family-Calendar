@@ -6,19 +6,8 @@ import AdminPanel from './AdminPanel'
 import CalendarView from './CalendarView'
 import ChoresView from './ChoresView'
 import WeatherWidget from './WeatherWidget'
-import type { Plan } from '@/lib/supabase/types'
-
-export interface CalendarEvent {
-  id: string
-  title: string
-  start: string
-  end: string
-  allDay: boolean
-  calendarId: string
-  personId: string
-  personName: string
-  color: string
-}
+import type { CalendarEvent, Plan } from '@/lib/supabase/types'
+export type { CalendarEvent }
 
 interface Props {
   userEmail:  string
