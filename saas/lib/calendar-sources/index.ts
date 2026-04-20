@@ -146,7 +146,11 @@ export async function fetchFamilyEvents(
       calendarId:       assignment.calendarId,
       personId:         assignment.personId,
       personName:       personMap.get(assignment.personId)?.name ?? '',
-      color:            assignment.color,
+      // Tile accent follows the assigned person's color, not the
+      // source calendar's stored color. Keeps tile + avatar visually
+      // aligned, and survives recolors of the person record without
+      // a re-assignment.
+      color:            personMap.get(assignment.personId)?.color ?? assignment.color,
       recurringEventId: raw.recurringEventId,
       eventKey,
       attendeePersonIds,
