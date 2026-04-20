@@ -16,18 +16,16 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient()
 
-  const [horizon, reminders, chores, verifTokens] = await Promise.all([
+  const [horizon, reminders, chores] = await Promise.all([
     supabase.rpc('purge_event_horizon_stale'),
     supabase.rpc('purge_reminder_sends_old'),
     supabase.rpc('purge_old_chore_completions'),
-    supabase.rpc('purge_verification_tokens_expired'),
   ])
 
   const errors: string[] = []
-  if (horizon.error)     errors.push(`horizon: ${horizon.error.message}`)
-  if (reminders.error)   errors.push(`reminders: ${reminders.error.message}`)
-  if (chores.error)      errors.push(`chores: ${chores.error.message}`)
-  if (verifTokens.error) errors.push(`verif_tokens: ${verifTokens.error.message}`)
+  if (horizon.error)   errors.push(`horizon: ${horizon.error.message}`)
+  if (reminders.error) errors.push(`reminders: ${reminders.error.message}`)
+  if (chores.error)    errors.push(`chores: ${chores.error.message}`)
 
   return NextResponse.json({ ok: errors.length === 0, errors })
 }

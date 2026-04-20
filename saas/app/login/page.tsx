@@ -55,38 +55,6 @@ export default async function LoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-widest text-gray-600">
-            <div className="h-px flex-1 bg-white/10" />
-            or
-            <div className="h-px flex-1 bg-white/10" />
-          </div>
-
-          <form
-            action={async (formData: FormData) => {
-              'use server'
-              const email = String(formData.get('email') ?? '').trim().toLowerCase()
-              if (!email) return
-              await signIn('resend', { email, redirectTo: '/dashboard' })
-            }}
-            className="space-y-2"
-          >
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-indigo-400/50"
-            />
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-95"
-            >
-              Send me a sign-in link
-            </button>
-          </form>
-
           <p className="mt-6 text-center text-xs text-gray-500">
             By signing in you agree to our{' '}
             <a href="/privacy" className="underline hover:text-gray-300">Privacy Policy</a>
