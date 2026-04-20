@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { MapPin, Users, UserCheck, Bell, Repeat, Pencil, X } from 'lucide-react'
+import { MapPin, Users, UserCheck, Bell, Repeat, Settings, X } from 'lucide-react'
 import type { CalendarEvent, Person } from '@/lib/supabase/types'
 
 interface Props {
@@ -98,7 +98,7 @@ export default function EventDetailsModal({ event, people, use24h, onClose, onEd
             onClick={onEditAssignments}
             className="flex items-center gap-1.5 rounded-md bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-400"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Settings className="h-4 w-4" />
             Edit assignments
           </button>
         </div>

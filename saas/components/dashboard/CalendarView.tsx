@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useEffect, useRef, useSyncExternalStore } from 'react'
-import { Settings } from 'lucide-react'
 import type { CalendarEvent, Person } from '@/lib/supabase/types'
 
 type CalView = 'today' | 'week' | 'month'
@@ -18,11 +17,10 @@ interface Props {
   mineOnly:      boolean
   mineAvailable: boolean
   onToggleMine:  () => void
-  onViewChange:    (v: CalView) => void
-  onNavigate:      (dir: -1 | 1) => void
-  onGoToday:       () => void
-  onEventClick?:   (event: CalendarEvent) => void
-  onEventSettings?:(event: CalendarEvent) => void
+  onViewChange:  (v: CalView) => void
+  onNavigate:    (dir: -1 | 1) => void
+  onGoToday:     () => void
+  onEventClick?: (event: CalendarEvent) => void
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -245,7 +243,7 @@ function layoutDayEvents(events: CalendarEvent[]) {
 
 // ── Root component ─────────────────────────────────────────────
 
-export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, mineOnly, mineAvailable, onToggleMine, onViewChange, onNavigate, onGoToday, onEventClick, onEventSettings }: Props) {
+export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, mineOnly, mineAvailable, onToggleMine, onViewChange, onNavigate, onGoToday, onEventClick }: Props) {
   const todayStr = isoDate(now)
   const personById = useMemo(
     () => new Map(people.map(p => [p.id, p] as const)),
@@ -308,7 +306,7 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
         : <TimeGrid
             days={calView === 'today' ? [viewDate] : getWeekDays(viewDate)}
             events={events} now={now} todayStr={todayStr} use24h={use24h}
-            personById={personById} onEventClick={onEventClick} onEventSettings={onEventSettings}
+            personById={personById} onEventClick={onEventClick}
           />
       }
     </div>
@@ -317,15 +315,14 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
 
 // ── Time grid (Today + Week) ───────────────────────────────────
 
-function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClick, onEventSettings }: {
-  days:             Date[]
-  events:           CalendarEvent[]
-  now:              Date
-  todayStr:         string
-  use24h:           boolean
-  personById:       Map<string, Person>
-  onEventClick?:    (event: CalendarEvent) => void
-  onEventSettings?: (event: CalendarEvent) => void
+function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClick }: {
+  days:         Date[]
+  events:       CalendarEvent[]
+  now:          Date
+  todayStr:     string
+  use24h:       boolean
+  personById:   Map<string, Person>
+  onEventClick?: (event: CalendarEvent) => void
 }) {
   const rowHeight = useRowHeight()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -448,7 +445,6 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
                   // is tall enough to breathe. Makes tablet-sized week view much
                   // more readable without regressing tight tiles on phone.
                   const stacked    = height >= 52
-                  const showCog    = !!onEventSettings && height >= 48
                   const timeLabel  = formatTime(start, use24h)
                   return (
                     <div key={ev.id}
@@ -484,17 +480,6 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
                         </>
                       )}
                       <ResponsibilityBadge ids={ev.responsiblePersonIds} personById={personById} size={14} />
-                      {showCog && (
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); onEventSettings!(ev) }}
-                          aria-label="Edit assignments"
-                          title="Edit assignments"
-                          className="absolute bottom-0.5 right-0.5 rounded-full bg-black/30 p-0.5 text-white/80 hover:bg-black/50 hover:text-white"
-                        >
-                          <Settings className="h-3 w-3 md:h-3.5 md:w-3.5" />
-                        </button>
-                      )}
                     </div>
                   )
                 })}

@@ -210,7 +210,6 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
               })}
               onGoToday={() => setViewDate(new Date())}
               onEventClick={setDetailsEvent}
-              onEventSettings={setOverlayEvent}
             />
           )}
           {page === 'chores' && now && (
