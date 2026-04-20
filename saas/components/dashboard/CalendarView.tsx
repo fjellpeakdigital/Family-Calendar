@@ -192,7 +192,7 @@ function MonthTile({ ev, personById, onEventClick, className }: {
       onClick={() => onEventClick?.(ev)}
       role={onEventClick ? 'button' : undefined}
       className={`relative flex items-center truncate rounded px-1 md:px-1.5 py-0.5 md:py-1 text-xs md:text-sm leading-tight ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''} ${className ?? ''}`}
-      style={{ background: accent + '28', color: accent, borderLeft: `2px solid ${accent}` }}
+      style={{ background: accent + '44', color: accent, borderLeft: `3px solid ${accent}` }}
       title={`${ev.personName} – ${ev.title}`}
     >
       {multi
