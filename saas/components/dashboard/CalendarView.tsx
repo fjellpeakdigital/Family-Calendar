@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useEffect, useRef } from 'react'
+import { useMemo, useEffect, useRef, useSyncExternalStore } from 'react'
 import type { CalendarEvent, Person } from '@/lib/supabase/types'
 
 type CalView = 'today' | 'week' | 'month'
@@ -23,9 +23,41 @@ interface Props {
   onEventClick?: (event: CalendarEvent) => void
 }
 
-const DAY_NAMES  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const HOURS      = Array.from({ length: 24 }, (_, i) => i)
-const ROW_HEIGHT = 56 // px per hour
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const HOURS     = Array.from({ length: 24 }, (_, i) => i)
+
+/**
+ * Responsive hour-row height. Phones stay compact; tablets and up get
+ * meaningfully taller rows so events aren't crushed. JS positioning
+ * math has to use the same value the CSS renders, so we track it in
+ * state and recompute on resize.
+ */
+const ROW_HEIGHT_PHONE  = 56
+const ROW_HEIGHT_TABLET = 72
+const ROW_HEIGHT_DESKTOP = 88
+
+function subscribeToResize(cb: () => void): () => void {
+  window.addEventListener('resize', cb)
+  return () => window.removeEventListener('resize', cb)
+}
+
+function snapshotRowHeight(): number {
+  const w = window.innerWidth
+  if (w >= 1280) return ROW_HEIGHT_DESKTOP
+  if (w >= 768)  return ROW_HEIGHT_TABLET
+  return ROW_HEIGHT_PHONE
+}
+
+/** Track the hour-row height as a reactive value. On the server we
+ *  return the phone default — hydration then switches to the real
+ *  viewport-sized height on mount without a cascading render. */
+function useRowHeight(): number {
+  return useSyncExternalStore(
+    subscribeToResize,
+    snapshotRowHeight,
+    () => ROW_HEIGHT_PHONE,
+  )
+}
 
 // ── Shared helpers ─────────────────────────────────────────────
 
@@ -139,6 +171,34 @@ function ResponsibilityBadge({ ids, personById, size }: {
  */
 function tileAccent(ev: CalendarEvent): string {
   return ev.attendeePersonIds.length > 1 ? '#64748b' : ev.color
+}
+
+/**
+ * Single-event cell in the month grid. Used for both the mobile
+ * (capped at 3) and tablet+ (capped at 5) lists via className gating.
+ */
+function MonthTile({ ev, personById, onEventClick, className }: {
+  ev:            CalendarEvent
+  personById:    Map<string, Person>
+  onEventClick?: (event: CalendarEvent) => void
+  className?:    string
+}) {
+  const accent = tileAccent(ev)
+  const multi  = ev.attendeePersonIds.length > 1
+  return (
+    <div
+      onClick={() => onEventClick?.(ev)}
+      role={onEventClick ? 'button' : undefined}
+      className={`relative flex items-center truncate rounded px-1 md:px-1.5 py-0.5 md:py-1 text-xs md:text-sm leading-tight ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''} ${className ?? ''}`}
+      style={{ background: accent + '28', color: accent, borderLeft: `2px solid ${accent}` }}
+      title={`${ev.personName} – ${ev.title}`}
+    >
+      {multi
+        ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={10} />
+        : (ev.personName ? <span className="truncate">{ev.personName.split(' ')[0]} – </span> : null)}
+      <span className="truncate">{ev.title}</span>
+    </div>
+  )
 }
 
 /**
@@ -260,32 +320,34 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
   personById:   Map<string, Person>
   onEventClick?: (event: CalendarEvent) => void
 }) {
+  const rowHeight = useRowHeight()
   const scrollRef = useRef<HTMLDivElement>(null)
   const allDay  = events.filter(e => e.allDay)
   const timed   = events.filter(e => !e.allDay)
 
-  // Scroll to current hour on mount
+  // Scroll to current hour on mount (and whenever rowHeight changes,
+  // because the absolute scroll position is in px).
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    const target = (now.getHours() - 1) * ROW_HEIGHT
+    const target = (now.getHours() - 1) * rowHeight
     el.scrollTop = Math.max(0, target)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days.length])
+  }, [days.length, rowHeight])
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Day header */}
       <div className="flex flex-shrink-0 border-b border-white/10">
-        <div className="w-14 flex-shrink-0" />
+        <div className="w-14 flex-shrink-0 md:w-12" />
         {days.map(day => {
           const isToday = isoDate(day) === todayStr
           return (
-            <div key={isoDate(day)} className="flex flex-1 flex-col items-center py-2">
-              <span className={`text-xs font-medium uppercase tracking-wider ${isToday ? 'text-sky-300' : 'text-gray-500'}`}>
+            <div key={isoDate(day)} className="flex flex-1 flex-col items-center py-2 md:py-3">
+              <span className={`text-xs md:text-sm font-semibold uppercase tracking-wider ${isToday ? 'text-sky-300' : 'text-gray-500'}`}>
                 {DAY_NAMES[day.getDay()]}
               </span>
-              <span className={`mt-1 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/40' : 'text-white'}`}>
+              <span className={`mt-1 flex h-7 w-7 md:h-9 md:w-9 items-center justify-center rounded-full text-sm md:text-base font-bold ${isToday ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/40' : 'text-white'}`}>
                 {day.getDate()}
               </span>
             </div>
@@ -295,8 +357,8 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
 
       {/* All-day row */}
       {allDay.length > 0 && (
-        <div className="flex flex-shrink-0 border-b border-white/10 py-1">
-          <div className="w-14 flex-shrink-0 pr-2 pt-1 text-right text-xs text-gray-600">all day</div>
+        <div className="flex flex-shrink-0 border-b border-white/10 py-1 md:py-1.5">
+          <div className="w-14 flex-shrink-0 pr-2 pt-1 text-right text-xs md:text-sm md:w-12 text-gray-600">all day</div>
           <div className="flex flex-1">
             {days.map(day => {
               const ds = isoDate(day)
@@ -310,7 +372,7 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
                       <div key={ev.id}
                         onClick={() => onEventClick?.(ev)}
                         role={onEventClick ? 'button' : undefined}
-                        className={`relative mb-0.5 flex items-center truncate rounded px-1 py-0.5 text-xs font-medium ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+                        className={`relative mb-0.5 flex items-center truncate rounded px-1 py-0.5 md:py-1 text-xs md:text-sm font-medium ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
                         style={{ background: accent + '33', color: accent, borderLeft: `2px solid ${accent}` }}
                         title={`${ev.personName} – ${ev.title}`}>
                         {multi
@@ -330,12 +392,12 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
 
       {/* Scrollable time grid */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="flex" style={{ minHeight: `${24 * ROW_HEIGHT}px` }}>
+        <div className="flex" style={{ minHeight: `${24 * rowHeight}px` }}>
           {/* Hour gutter */}
-          <div className="w-14 flex-shrink-0">
+          <div className="w-14 flex-shrink-0 md:w-12">
             {HOURS.map(h => (
-              <div key={h} className="relative" style={{ height: ROW_HEIGHT }}>
-                <span className="absolute -top-2 right-2 text-xs text-gray-600">
+              <div key={h} className="relative" style={{ height: rowHeight }}>
+                <span className="absolute -top-2 right-2 text-xs md:text-sm text-gray-600">
                   {formatHour(h, use24h)}
                 </span>
               </div>
@@ -351,15 +413,15 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
             return (
               <div key={ds}
                 className={`relative flex-1 border-l border-white/5 ${isToday ? 'bg-sky-500/[0.05]' : ''}`}
-                style={{ minHeight: `${24 * ROW_HEIGHT}px` }}>
+                style={{ minHeight: `${24 * rowHeight}px` }}>
                 {HOURS.map(h => (
-                  <div key={h} className="absolute w-full border-t border-white/5" style={{ top: h * ROW_HEIGHT }} />
+                  <div key={h} className="absolute w-full border-t border-white/5" style={{ top: h * rowHeight }} />
                 ))}
 
                 {/* Current time indicator */}
                 {isToday && (
                   <div className="absolute z-10 w-full"
-                    style={{ top: (now.getHours() + now.getMinutes() / 60) * ROW_HEIGHT }}>
+                    style={{ top: (now.getHours() + now.getMinutes() / 60) * rowHeight }}>
                     <div className="relative">
                       <div className="absolute -left-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-sky-400/70" />
                       <div className="h-px bg-sky-400/40" />
@@ -370,16 +432,21 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
                 {layoutDayEvents(dayEvents).map(ev => {
                   const start  = new Date(ev.start)
                   const end    = new Date(ev.end)
-                  const top    = (start.getHours() + start.getMinutes() / 60) * ROW_HEIGHT
-                  const height = Math.max(((end.getTime() - start.getTime()) / 3_600_000) * ROW_HEIGHT, 20)
+                  const top    = (start.getHours() + start.getMinutes() / 60) * rowHeight
+                  const height = Math.max(((end.getTime() - start.getTime()) / 3_600_000) * rowHeight, 24)
                   const pct    = 100 / ev.totalCols
                   const accent = tileAccent(ev)
                   const multi  = ev.attendeePersonIds.length > 1
+                  // Stack time / title / avatars on separate lines when the tile
+                  // is tall enough to breathe. Makes tablet-sized week view much
+                  // more readable without regressing tight tiles on phone.
+                  const stacked = height >= 52
+                  const timeLabel = formatTime(start, use24h)
                   return (
                     <div key={ev.id}
                       onClick={() => onEventClick?.(ev)}
                       role={onEventClick ? 'button' : undefined}
-                      className={`absolute overflow-hidden rounded-md px-1.5 py-1 text-xs ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
+                      className={`absolute overflow-hidden rounded-md px-1.5 py-1 md:py-1.5 text-xs md:text-sm ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
                       style={{
                         top, height,
                         left:       `calc(${ev.col * pct}% + 2px)`,
@@ -389,10 +456,25 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
                         color:      accent,
                       }}
                       title={`${ev.personName} – ${ev.title}`}>
-                      {multi
-                        ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={14} />
-                        : (ev.personName && <span className="font-bold">{ev.personName} – </span>)}
-                      <span>{ev.title}</span>
+                      {stacked ? (
+                        <>
+                          <div className="text-[10px] md:text-xs opacity-80">{timeLabel}</div>
+                          <div className="flex items-center gap-1 leading-tight">
+                            {multi && <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={14} />}
+                            <span className="truncate font-semibold">{ev.title}</span>
+                          </div>
+                          {!multi && ev.personName && (
+                            <div className="mt-0.5 truncate text-[10px] md:text-xs opacity-70">{ev.personName}</div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {multi
+                            ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={14} />
+                            : (ev.personName && <span className="font-bold">{ev.personName} – </span>)}
+                          <span>{ev.title}</span>
+                        </>
+                      )}
                       <ResponsibilityBadge ids={ev.responsiblePersonIds} personById={personById} size={14} />
                     </div>
                   )
@@ -459,35 +541,31 @@ function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
           const seen = new Set<string>()
           const unique = dayEvents.filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true })
 
+          // More room on tablet and up — show more events per day.
+          const maxShown = 3
           return (
             <div key={ds}
-              className={`min-h-0 border-b border-r border-white/5 p-1 ${inMonth ? '' : 'opacity-30'}`}>
-              <div className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+              className={`min-h-0 border-b border-r border-white/5 p-1 md:p-2 ${inMonth ? '' : 'opacity-30'}`}>
+              <div className={`mb-1 flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded-full text-xs md:text-sm font-bold ${
                 isToday ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/40' : 'text-gray-400'
               }`}>
                 {day.getDate()}
               </div>
 
-              <div className="space-y-0.5">
-                {unique.slice(0, 3).map(ev => {
-                  const accent = tileAccent(ev)
-                  const multi  = ev.attendeePersonIds.length > 1
-                  return (
-                    <div key={ev.id}
-                      onClick={() => onEventClick?.(ev)}
-                      role={onEventClick ? 'button' : undefined}
-                      className={`relative flex items-center truncate rounded px-1 py-0.5 text-xs leading-tight ${onEventClick ? 'cursor-pointer hover:brightness-125' : ''}`}
-                      style={{ background: accent + '28', color: accent, borderLeft: `2px solid ${accent}` }}
-                      title={`${ev.personName} – ${ev.title}`}>
-                      {multi
-                        ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={10} />
-                        : (ev.personName ? <span className="truncate">{ev.personName.split(' ')[0]} – </span> : null)}
-                      <span className="truncate">{ev.title}</span>
-                    </div>
-                  )
-                })}
-                {unique.length > 3 && (
-                  <div className="pl-1 text-xs text-gray-600">+{unique.length - 3} more</div>
+              <div className="space-y-0.5 md:space-y-1">
+                {/* Mobile: cap at 3 */}
+                {unique.slice(0, maxShown).map(ev => (
+                  <MonthTile key={`sm-${ev.id}`} ev={ev} personById={personById} onEventClick={onEventClick} className="md:hidden" />
+                ))}
+                {/* Tablet+: cap at 5 */}
+                {unique.slice(0, 5).map(ev => (
+                  <MonthTile key={`md-${ev.id}`} ev={ev} personById={personById} onEventClick={onEventClick} className="hidden md:flex" />
+                ))}
+                {unique.length > maxShown && (
+                  <div className="pl-1 text-xs md:hidden text-gray-600">+{unique.length - maxShown} more</div>
+                )}
+                {unique.length > 5 && (
+                  <div className="pl-1 text-xs hidden md:block text-gray-600">+{unique.length - 5} more</div>
                 )}
               </div>
             </div>
@@ -506,4 +584,13 @@ function formatHour(h: number, use24h: boolean): string {
   if (h < 12) return `${h}am`
   if (h === 12) return '12pm'
   return `${h - 12}pm`
+}
+
+function formatTime(d: Date, use24h: boolean): string {
+  const h = d.getHours()
+  const m = String(d.getMinutes()).padStart(2, '0')
+  if (use24h) return `${String(h).padStart(2, '0')}:${m}`
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${h12}:${m} ${ampm}`
 }
