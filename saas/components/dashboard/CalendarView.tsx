@@ -65,12 +65,14 @@ function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
 
 function getWeekDays(anchor: Date): Date[] {
   const days: Date[] = []
-  const mon = new Date(anchor)
-  mon.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7))
-  mon.setHours(0, 0, 0, 0)
+  const start = new Date(anchor)
+  // Sunday-first week (US convention). Date.getDay() already returns
+  // 0 for Sunday, so subtracting it lands on the previous Sunday.
+  start.setDate(anchor.getDate() - anchor.getDay())
+  start.setHours(0, 0, 0, 0)
   for (let i = 0; i < 7; i++) {
-    const d = new Date(mon)
-    d.setDate(mon.getDate() + i)
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
     days.push(d)
   }
   return days
@@ -498,10 +500,10 @@ function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
   onEventClick?: (event: CalendarEvent) => void
 }) {
   const cells = useMemo(() => {
-    // Build 6-week grid starting from the Monday of the week containing the 1st
+    // Build 6-week grid starting from the Sunday of the week containing the 1st
     const first = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
     const start = new Date(first)
-    start.setDate(first.getDate() - ((first.getDay() + 6) % 7))
+    start.setDate(first.getDate() - first.getDay())
     start.setHours(0, 0, 0, 0)
 
     const days: Date[] = []
@@ -519,7 +521,7 @@ function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Day-name header */}
       <div className="flex flex-shrink-0 border-b border-white/10">
-        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
           <div key={d} className="flex-1 py-2 text-center text-xs font-semibold uppercase tracking-wider text-gray-600">
             {d}
           </div>
