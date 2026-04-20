@@ -91,22 +91,23 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
       let timeMin: Date
       let timeMax: Date
 
+      // Sunday-first week, must match CalendarView's grid convention.
       if (calView === 'today') {
         timeMin = new Date(viewDate); timeMin.setHours(0, 0, 0, 0)
         timeMax = new Date(viewDate); timeMax.setHours(23, 59, 59, 999)
       } else if (calView === 'week') {
         timeMin = new Date(viewDate)
-        timeMin.setDate(viewDate.getDate() - ((viewDate.getDay() + 6) % 7))
+        timeMin.setDate(viewDate.getDate() - viewDate.getDay())
         timeMin.setHours(0, 0, 0, 0)
         timeMax = new Date(timeMin)
         timeMax.setDate(timeMin.getDate() + 6)
         timeMax.setHours(23, 59, 59, 999)
       } else {
         timeMin = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
-        timeMin.setDate(timeMin.getDate() - ((timeMin.getDay() + 6) % 7))
+        timeMin.setDate(timeMin.getDate() - timeMin.getDay())
         timeMin.setHours(0, 0, 0, 0)
         timeMax = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0)
-        timeMax.setDate(timeMax.getDate() + (7 - timeMax.getDay()) % 7)
+        timeMax.setDate(timeMax.getDate() + (6 - timeMax.getDay()))
         timeMax.setHours(23, 59, 59, 999)
       }
 
