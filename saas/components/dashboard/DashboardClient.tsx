@@ -5,6 +5,7 @@ import { useConfig } from './ConfigProvider'
 import AdminPanel from './AdminPanel'
 import CalendarView from './CalendarView'
 import ChoresView from './ChoresView'
+import EventDetailsModal from './EventDetailsModal'
 import EventOverlayModal from './EventOverlayModal'
 import WeatherWidget from './WeatherWidget'
 import type { CalendarEvent, Plan } from '@/lib/supabase/types'
@@ -44,7 +45,10 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
   const [loadingCal, setLoadingCal] = useState(false)
   const [showAdmin, setShowAdmin]   = useState(false)
   const [portrait, setPortrait]     = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  // Two modal states: details (from tile click) and overlay/assignments (from
+  // the cog button or the 'Edit assignments' CTA inside the details modal).
+  const [detailsEvent, setDetailsEvent] = useState<CalendarEvent | null>(null)
+  const [overlayEvent, setOverlayEvent] = useState<CalendarEvent | null>(null)
   const [mineOnly, setMineOnly]     = useState(false)
 
   // Events visible to CalendarView. When Mine is on and we know which
@@ -205,7 +209,8 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
                 return next
               })}
               onGoToday={() => setViewDate(new Date())}
-              onEventClick={setSelectedEvent}
+              onEventClick={setDetailsEvent}
+              onEventSettings={setOverlayEvent}
             />
           )}
           {page === 'chores' && now && (
@@ -235,12 +240,28 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
         <AdminPanel onClose={() => setShowAdmin(false)} userEmail={userEmail} familyPlan={familyPlan} theme={theme} />
       )}
 
-      {selectedEvent && (
-        <EventOverlayModal
-          event={selectedEvent}
+      {detailsEvent && (
+        <EventDetailsModal
+          event={detailsEvent}
           people={config.people}
           use24h={config.settings?.use24h ?? false}
-          onClose={() => setSelectedEvent(null)}
+          onClose={() => setDetailsEvent(null)}
+          onEditAssignments={() => {
+            // Hand off to the overlay modal without flashing the
+            // backdrop — close details, open overlay in one tick.
+            const ev = detailsEvent
+            setDetailsEvent(null)
+            setOverlayEvent(ev)
+          }}
+        />
+      )}
+
+      {overlayEvent && (
+        <EventOverlayModal
+          event={overlayEvent}
+          people={config.people}
+          use24h={config.settings?.use24h ?? false}
+          onClose={() => setOverlayEvent(null)}
           onSaved={fetchEvents}
         />
       )}
