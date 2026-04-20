@@ -199,7 +199,9 @@ function MonthTile({ ev, personById, onEventClick, className }: {
     >
       {multi
         ? <AttendeeAvatars ids={ev.attendeePersonIds} personById={personById} size={10} />
-        : (ev.personName ? <span className="truncate">{ev.personName.split(' ')[0]} – </span> : null)}
+        : (ev.personName
+            ? <span className="truncate md:hidden">{ev.personName.split(' ')[0]} – </span>
+            : null)}
       <span className="truncate">{ev.title}</span>
     </div>
   )
@@ -558,31 +560,35 @@ function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
           const seen = new Set<string>()
           const unique = dayEvents.filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true })
 
-          // More room on tablet and up — show more events per day.
-          const maxShown = 3
+          // On phone we keep a single-column stack (3 pills max); on
+          // tablet+ we switch to a 2-column grid so denser days stay
+          // inside the cell instead of bleeding into neighbors. With
+          // 2 columns we can show up to 6 before the +N marker.
+          const mobileMax = 3
+          const tabletMax = 6
           return (
             <div key={ds}
-              className={`min-h-0 border-b border-r border-white/5 p-1 md:p-2 ${inMonth ? '' : 'opacity-30'}`}>
+              className={`min-h-0 overflow-hidden border-b border-r border-white/5 p-1 md:p-2 ${inMonth ? '' : 'opacity-30'}`}>
               <div className={`mb-1 flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded-full text-xs md:text-sm font-bold ${
                 isToday ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/40' : 'text-gray-400'
               }`}>
                 {day.getDate()}
               </div>
 
-              <div className="space-y-0.5 md:space-y-1">
-                {/* Mobile: cap at 3 */}
-                {unique.slice(0, maxShown).map(ev => (
+              <div className="space-y-0.5 md:grid md:grid-cols-2 md:gap-1 md:space-y-0">
+                {/* Mobile: cap at 3 stacked */}
+                {unique.slice(0, mobileMax).map(ev => (
                   <MonthTile key={`sm-${ev.id}`} ev={ev} personById={personById} onEventClick={onEventClick} className="md:hidden" />
                 ))}
-                {/* Tablet+: cap at 5 */}
-                {unique.slice(0, 5).map(ev => (
+                {/* Tablet+: cap at 6, two per row */}
+                {unique.slice(0, tabletMax).map(ev => (
                   <MonthTile key={`md-${ev.id}`} ev={ev} personById={personById} onEventClick={onEventClick} className="hidden md:flex" />
                 ))}
-                {unique.length > maxShown && (
-                  <div className="pl-1 text-xs md:hidden text-gray-600">+{unique.length - maxShown} more</div>
+                {unique.length > mobileMax && (
+                  <div className="pl-1 text-xs md:hidden text-gray-600">+{unique.length - mobileMax} more</div>
                 )}
-                {unique.length > 5 && (
-                  <div className="pl-1 text-xs hidden md:block text-gray-600">+{unique.length - 5} more</div>
+                {unique.length > tabletMax && (
+                  <div className="pl-1 text-xs hidden md:col-span-2 md:block text-gray-600">+{unique.length - tabletMax} more</div>
                 )}
               </div>
             </div>
