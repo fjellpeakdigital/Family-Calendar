@@ -167,12 +167,14 @@ function ResponsibilityBadge({ ids, personById, size }: {
 }
 
 /**
- * Per-tile color: keep the source person's color when there is a single
- * attendee (today's behavior). Fall back to a neutral tint when the
- * event has multiple attendees so the stacked avatars carry identity.
+ * Per-tile color. Single-attendee tiles use the attendee's person
+ * color. Multi-attendee tiles fall back to the source calendar color
+ * (e.g. the "Family" calendar color) — the stacked avatars carry
+ * per-person identity, and the source color is the honest answer to
+ * "what calendar is this from."
  */
 function tileAccent(ev: CalendarEvent): string {
-  return ev.attendeePersonIds.length > 1 ? '#64748b' : ev.color
+  return ev.color
 }
 
 /**
