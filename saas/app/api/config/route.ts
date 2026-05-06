@@ -50,7 +50,11 @@ export async function PUT(req: NextRequest) {
 
   let body: { config: ConfigJson }
   try {
-    body = await req.json()
+    const raw = await req.text()
+    if (raw.length > 256 * 1024) {
+      return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
+    }
+    body = JSON.parse(raw)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -119,27 +123,88 @@ function sanitizeOffset(raw: unknown): number | null {
   return n
 }
 
+function str(v: unknown, max: number, fallback = ''): string {
+  if (typeof v !== 'string') return fallback
+  return v.slice(0, max)
+}
+
+const PERSON_TYPES  = new Set(['adult', 'kid'])
+const PERIODS       = new Set(['morning', 'afternoon', 'evening', 'anytime'])
+const PROVIDERS     = new Set(['google', 'microsoft', 'ics', 'caldav'])
+const DAYS          = new Set(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])
+
+function sanitizePeople(raw: unknown[]): ConfigJson['people'] {
+  return raw.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const p = item as Record<string, unknown>
+    if (!p.id || !p.name || !PERSON_TYPES.has(p.type as string)) return []
+    return [{
+      id:    str(p.id,    100),
+      name:  str(p.name,  100),
+      type:  p.type as 'adult' | 'kid',
+      color: str(p.color, 20, '#6b7280'),
+      emoji: str(p.emoji, 10, ''),
+    }]
+  })
+}
+
+function sanitizeChores(raw: unknown[]): ConfigJson['chores'] {
+  return raw.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const c = item as Record<string, unknown>
+    if (!c.id || !c.task || !PERIODS.has(c.period as string)) return []
+    const points = Number(c.points)
+    return [{
+      id:      str(c.id,   100),
+      task:    str(c.task, 200),
+      days:    Array.isArray(c.days)
+        ? (c.days as unknown[]).filter(d => typeof d === 'string' && DAYS.has(d)) as string[]
+        : [],
+      period:  c.period as import('@/lib/supabase/types').Period,
+      points:  Number.isFinite(points) && points >= 0 ? Math.min(Math.round(points), 1000) : 0,
+      kid_ids: Array.isArray(c.kid_ids)
+        ? (c.kid_ids as unknown[]).flatMap(k => typeof k === 'string' ? [k.slice(0, 100)] : [])
+        : [],
+    }]
+  })
+}
+
+function sanitizeCalAssignments(raw: unknown[]): ConfigJson['cal_assignments'] {
+  return raw.flatMap(item => {
+    if (!item || typeof item !== 'object') return []
+    const a = item as Record<string, unknown>
+    if (!a.calendarId || !a.personId) return []
+    const provider = PROVIDERS.has(a.provider as string) ? a.provider as import('@/lib/supabase/types').CalendarSourceProvider : 'google'
+    return [{
+      provider,
+      calendarId:   str(a.calendarId,   500),
+      calendarName: str(a.calendarName, 200),
+      accountEmail: typeof a.accountEmail === 'string' ? str(a.accountEmail, 200) : undefined,
+      personId:     str(a.personId,     100),
+      color:        str(a.color,         20, '#6b7280'),
+    }]
+  })
+}
+
 function sanitizeConfig(raw: unknown): ConfigJson {
   const r = raw as Record<string, unknown>
+  const s = (typeof r.settings === 'object' && r.settings !== null)
+    ? r.settings as Record<string, unknown>
+    : {}
+
+  const rawPin = String(s.pin ?? '1234')
+  const pin = /^\d{4,10}$/.test(rawPin) ? rawPin : '1234'
+
   return {
-    people:          Array.isArray(r.people)          ? r.people          : [],
-    chores:          Array.isArray(r.chores)          ? r.chores          : [],
-    cal_assignments: Array.isArray(r.cal_assignments) ? r.cal_assignments : [],
+    people:          Array.isArray(r.people)          ? sanitizePeople(r.people)          : [],
+    chores:          Array.isArray(r.chores)          ? sanitizeChores(r.chores)          : [],
+    cal_assignments: Array.isArray(r.cal_assignments) ? sanitizeCalAssignments(r.cal_assignments) : [],
     settings: {
-      location: typeof r.settings === 'object' && r.settings !== null
-        ? String((r.settings as Record<string, unknown>).location ?? '')
-        : '',
-      use24h: typeof r.settings === 'object' && r.settings !== null
-        ? !!(r.settings as Record<string, unknown>).use24h
-        : false,
-      theme: typeof r.settings === 'object' && r.settings !== null
-        && (r.settings as Record<string, unknown>).theme === 'light' ? 'light' : 'dark',
-      pin: typeof r.settings === 'object' && r.settings !== null
-        ? String((r.settings as Record<string, unknown>).pin ?? '1234')
-        : '1234',
-      defaultReminderOffsetMin: sanitizeOffset(
-        (r.settings as Record<string, unknown> | null | undefined)?.defaultReminderOffsetMin
-      ),
+      location: str(s.location, 200),
+      use24h:   !!s.use24h,
+      theme:    s.theme === 'light' ? 'light' : 'dark',
+      pin,
+      defaultReminderOffsetMin: sanitizeOffset(s.defaultReminderOffsetMin),
     },
     rewards: typeof r.rewards === 'object' && r.rewards !== null
       ? r.rewards as Record<string, []>

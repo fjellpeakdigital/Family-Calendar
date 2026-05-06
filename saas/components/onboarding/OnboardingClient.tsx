@@ -21,7 +21,8 @@ type Step = typeof STEPS[number]
 export default function OnboardingClient({ userEmail }: { userEmail: string }) {
   const router = useRouter()
   const [step, setStep] = useState<Step>('welcome')
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [state, setState] = useState<OnboardingState>({
     people:          [],
     chores:          [],
@@ -55,8 +56,9 @@ export default function OnboardingClient({ userEmail }: { userEmail: string }) {
 
   async function finish() {
     setSaving(true)
+    setSaveError(null)
     try {
-      await fetch('/api/config', {
+      const res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,7 +72,14 @@ export default function OnboardingClient({ userEmail }: { userEmail: string }) {
           },
         }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string }
+        setSaveError(data.error ?? 'Failed to save. Please try again.')
+        return
+      }
       router.push('/dashboard')
+    } catch {
+      setSaveError('Network error. Please check your connection and try again.')
     } finally {
       setSaving(false)
     }
@@ -101,7 +110,7 @@ export default function OnboardingClient({ userEmail }: { userEmail: string }) {
           {step === 'people'    && <StepPeople    {...commonProps} />}
           {step === 'calendars' && <StepCalendars {...commonProps} userEmail={userEmail} />}
           {step === 'chores'    && <StepChores    {...commonProps} />}
-          {step === 'done'      && <StepDone      state={state} onFinish={finish} saving={saving} />}
+          {step === 'done'      && <StepDone      state={state} onFinish={finish} saving={saving} saveError={saveError} />}
         </div>
       </div>
     </div>

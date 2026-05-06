@@ -62,6 +62,28 @@ export default async function InvitePage({ params }: Props) {
       )
     }
 
+    // Reject if the invite was issued for a specific email that doesn't match
+    if (payload.email && userEmail !== payload.email.toLowerCase()) {
+      return (
+        <InviteShell>
+          <h1 className="text-2xl font-bold text-white">Wrong account</h1>
+          <p className="mt-3 text-gray-400">
+            This invite is for <strong className="text-white">{payload.email}</strong>, but you're
+            signed in as <strong className="text-white">{userEmail}</strong>.
+          </p>
+          <p className="mt-2 text-sm text-gray-500">
+            Sign out and sign in with the correct Google account to accept this invite.
+          </p>
+          <a
+            href="/dashboard"
+            className="mt-6 inline-block rounded-xl border border-white/15 px-5 py-2.5 text-sm text-gray-400 hover:text-white transition"
+          >
+            Go to my dashboard →
+          </a>
+        </InviteShell>
+      )
+    }
+
     // Add user to the family
     await supabase.from('users').update({ family_id: payload.familyId }).eq('email', userEmail)
     redirect('/dashboard')

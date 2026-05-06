@@ -76,25 +76,35 @@ async function fetchOne(
   timeMin:     string,
   timeMax:     string,
 ): Promise<GoogleCalendarItem[]> {
-  const params = new URLSearchParams({
-    timeMin,
-    timeMax,
-    singleEvents: 'true',
-    orderBy:      'startTime',
-    maxResults:   '250',
-  })
+  const all: GoogleCalendarItem[] = []
+  let pageToken: string | undefined
 
-  const resp = await fetch(
-    `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  )
+  do {
+    const params = new URLSearchParams({
+      timeMin,
+      timeMax,
+      singleEvents: 'true',
+      orderBy:      'startTime',
+      maxResults:   '250',
+    })
+    if (pageToken) params.set('pageToken', pageToken)
 
-  if (!resp.ok) {
-    const err = await resp.text()
-    throw new Error(`Calendar fetch failed (${resp.status}): ${err}`)
-  }
+    const resp = await fetch(
+      `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
 
-  return ((await resp.json()).items as GoogleCalendarItem[] | undefined) ?? []
+    if (!resp.ok) {
+      const err = await resp.text()
+      throw new Error(`Calendar fetch failed (${resp.status}): ${err}`)
+    }
+
+    const body = await resp.json()
+    all.push(...((body.items as GoogleCalendarItem[] | undefined) ?? []))
+    pageToken = body.nextPageToken
+  } while (pageToken)
+
+  return all
 }
 
 export const googleAdapter: CalendarSourceAdapter = {

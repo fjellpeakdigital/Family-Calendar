@@ -4,12 +4,13 @@ import { Sparkles, Settings } from 'lucide-react'
 import type { OnboardingState } from './OnboardingClient'
 
 interface Props {
-  state:    OnboardingState
-  onFinish: () => void
-  saving:   boolean
+  state:      OnboardingState
+  onFinish:   () => void
+  saving:     boolean
+  saveError?: string | null
 }
 
-export default function StepDone({ state, onFinish, saving }: Props) {
+export default function StepDone({ state, onFinish, saving, saveError }: Props) {
   const kids   = state.people.filter(p => p.type === 'kid')
   const adults = state.people.filter(p => p.type === 'adult')
 
@@ -52,6 +53,12 @@ export default function StepDone({ state, onFinish, saving }: Props) {
       <div className="mb-6 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-gray-400">
         <p>You can change everything any time from the <strong className="inline-flex items-center gap-1 text-white"><Settings className="h-3.5 w-3.5" /> Admin panel</strong> on the dashboard.</p>
       </div>
+
+      {saveError && (
+        <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {saveError}
+        </p>
+      )}
 
       <button
         onClick={onFinish}

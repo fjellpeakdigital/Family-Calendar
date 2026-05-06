@@ -90,20 +90,23 @@ export const microsoftAdapter: CalendarSourceAdapter = {
       '$select':     'id,subject,location,start,end,isAllDay,seriesMasterId,originalStart',
     })
 
-    const resp = await fetch(
-      `${GRAPH_BASE}/me/calendars/${encodeURIComponent(ctx.assignment.calendarId)}/calendarView?${params}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          // Tell Graph to hand us UTC across the board so graphTimeToIso can normalize cleanly.
-          Prefer:         'outlook.timezone="UTC"',
-        },
-      }
-    )
-    if (!resp.ok) return []
+    const reqHeaders = {
+      Authorization: `Bearer ${accessToken}`,
+      // Tell Graph to hand us UTC across the board so graphTimeToIso can normalize cleanly.
+      Prefer:        'outlook.timezone="UTC"',
+    }
 
-    const data  = await resp.json() as { value?: MsEvent[] }
-    const items = data.value ?? []
+    const items: MsEvent[] = []
+    let nextUrl: string | null =
+      `${GRAPH_BASE}/me/calendars/${encodeURIComponent(ctx.assignment.calendarId)}/calendarView?${params}`
+
+    while (nextUrl) {
+      const resp = await fetch(nextUrl, { headers: reqHeaders })
+      if (!resp.ok) return []
+      const data = await resp.json() as { value?: MsEvent[]; '@odata.nextLink'?: string }
+      items.push(...(data.value ?? []))
+      nextUrl = data['@odata.nextLink'] ?? null
+    }
 
     return items.map<RawEvent>(ev => ({
       sourceId:         ev.id,
