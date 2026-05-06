@@ -9,6 +9,7 @@ interface Props {
   events:        CalendarEvent[]
   people:        Person[]
   loading:       boolean
+  hasError:      boolean
   now:           Date
   use24h:        boolean
   calView:       CalView
@@ -20,6 +21,7 @@ interface Props {
   onViewChange:  (v: CalView) => void
   onNavigate:    (dir: -1 | 1) => void
   onGoToday:     () => void
+  onRetry:       () => void
   onEventClick?: (event: CalendarEvent) => void
 }
 
@@ -61,7 +63,22 @@ function useRowHeight(): number {
 
 // ── Shared helpers ─────────────────────────────────────────────
 
-function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
+/** Returns YYYY-MM-DD in the LOCAL timezone — never UTC. */
+function localIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Returns the LOCAL calendar date of an event's ISO start string.
+ * All-day events have plain YYYY-MM-DD strings — return those directly.
+ * Timed events have a full ISO string (with offset or Z) — parse through
+ * a Date so the offset is honoured before extracting the local date.
+ */
+function eventLocalDate(isoStr: string): string {
+  // Plain date string (Google all-day, "YYYY-MM-DD") — already the right date.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return isoStr
+  return localIsoDate(new Date(isoStr))
+}
 
 function getWeekDays(anchor: Date): Date[] {
   const days: Date[] = []
@@ -245,8 +262,8 @@ function layoutDayEvents(events: CalendarEvent[]) {
 
 // ── Root component ─────────────────────────────────────────────
 
-export default function CalendarView({ events, people, loading, now, use24h, calView, viewDate, portrait, mineOnly, mineAvailable, onToggleMine, onViewChange, onNavigate, onGoToday, onEventClick }: Props) {
-  const todayStr = isoDate(now)
+export default function CalendarView({ events, people, loading, hasError, now, use24h, calView, viewDate, portrait, mineOnly, mineAvailable, onToggleMine, onViewChange, onNavigate, onGoToday, onRetry, onEventClick }: Props) {
+  const todayStr = localIsoDate(now)
   const personById = useMemo(
     () => new Map(people.map(p => [p.id, p] as const)),
     [people]
@@ -257,9 +274,9 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
       {/* View controls */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 px-4 py-2">
         <div className="flex items-center gap-1">
-          <button onClick={() => onNavigate(-1)}
+          <button onClick={() => onNavigate(-1)} aria-label="Previous"
             className="rounded-lg px-2 py-1 text-gray-500 hover:bg-white/5 hover:text-white">‹</button>
-          <button onClick={() => onNavigate(1)}
+          <button onClick={() => onNavigate(1)} aria-label="Next"
             className="rounded-lg px-2 py-1 text-gray-500 hover:bg-white/5 hover:text-white">›</button>
           <button onClick={onGoToday}
             className="ml-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-gray-400 hover:bg-white/5 hover:text-white">
@@ -299,31 +316,49 @@ export default function CalendarView({ events, people, loading, now, use24h, cal
         </div>
       </div>
 
-      {loading && (
-        <div className="flex-shrink-0 px-4 py-1 text-xs text-gray-600">Loading events…</div>
+      {/* Status bar: loading pulse, error banner, or nothing */}
+      {loading && !hasError && (
+        <div className="flex flex-shrink-0 items-center gap-2 px-4 py-1.5">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400/60" />
+          <span className="text-xs text-gray-600">Loading events…</span>
+        </div>
+      )}
+      {hasError && (
+        <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b border-red-500/20 bg-red-500/10 px-4 py-2">
+          <span className="text-xs text-red-400">Couldn't load events. Check your connection.</span>
+          <button
+            onClick={onRetry}
+            className="rounded px-2 py-0.5 text-xs font-semibold text-red-300 hover:bg-red-500/20"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
-      {calView === 'month'
-        ? <MonthView events={events} viewDate={viewDate} todayStr={todayStr} personById={personById} onEventClick={onEventClick} />
-        : <TimeGrid
-            days={calView === 'today' ? [viewDate] : getWeekDays(viewDate)}
-            events={events} now={now} todayStr={todayStr} use24h={use24h}
-            personById={personById} onEventClick={onEventClick}
-          />
-      }
+      {(() => {
+        const showEmpty = !loading && !hasError && events.length === 0
+        return calView === 'month'
+          ? <MonthView events={events} viewDate={viewDate} todayStr={todayStr} personById={personById} showEmpty={showEmpty} onEventClick={onEventClick} />
+          : <TimeGrid
+              days={calView === 'today' ? [viewDate] : getWeekDays(viewDate)}
+              events={events} now={now} todayStr={todayStr} use24h={use24h}
+              personById={personById} showEmpty={showEmpty} onEventClick={onEventClick}
+            />
+      })()}
     </div>
   )
 }
 
 // ── Time grid (Today + Week) ───────────────────────────────────
 
-function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClick }: {
+function TimeGrid({ days, events, now, todayStr, use24h, personById, showEmpty, onEventClick }: {
   days:         Date[]
   events:       CalendarEvent[]
   now:          Date
   todayStr:     string
   use24h:       boolean
   personById:   Map<string, Person>
+  showEmpty:    boolean
   onEventClick?: (event: CalendarEvent) => void
 }) {
   const rowHeight = useRowHeight()
@@ -342,14 +377,19 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
   }, [days.length, rowHeight])
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
+      {showEmpty && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <span className="text-sm text-gray-700">No events</span>
+        </div>
+      )}
       {/* Day header */}
       <div className="flex flex-shrink-0 border-b border-white/10">
         <div className="w-14 flex-shrink-0 md:w-12" />
         {days.map(day => {
-          const isToday = isoDate(day) === todayStr
+          const isToday = localIsoDate(day) === todayStr
           return (
-            <div key={isoDate(day)} className="flex flex-1 flex-col items-center py-2 md:py-3">
+            <div key={localIsoDate(day)} className="flex flex-1 flex-col items-center py-2 md:py-3">
               <span className={`text-xs md:text-sm font-semibold uppercase tracking-wider ${isToday ? 'text-sky-300' : 'text-gray-500'}`}>
                 {DAY_NAMES[day.getDay()]}
               </span>
@@ -367,7 +407,7 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
           <div className="w-14 flex-shrink-0 pr-2 pt-1 text-right text-xs md:text-sm md:w-12 text-gray-600">all day</div>
           <div className="flex flex-1">
             {days.map(day => {
-              const ds = isoDate(day)
+              const ds = localIsoDate(day)
               const dayEvs = allDay.filter(e => e.start.slice(0, 10) <= ds && e.end.slice(0, 10) > ds)
               return (
                 <div key={ds} className="flex-1 px-0.5">
@@ -412,9 +452,9 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
 
           {/* Day columns */}
           {days.map(day => {
-            const ds = isoDate(day)
+            const ds = localIsoDate(day)
             const isToday = ds === todayStr
-            const dayEvents = timed.filter(e => e.start.slice(0, 10) === ds)
+            const dayEvents = timed.filter(e => eventLocalDate(e.start) === ds)
 
             return (
               <div key={ds}
@@ -496,11 +536,12 @@ function TimeGrid({ days, events, now, todayStr, use24h, personById, onEventClic
 
 // ── Month grid ─────────────────────────────────────────────────
 
-function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
+function MonthView({ events, viewDate, todayStr, personById, showEmpty, onEventClick }: {
   events:        CalendarEvent[]
   viewDate:      Date
   todayStr:      string
   personById:    Map<string, Person>
+  showEmpty:     boolean
   onEventClick?: (event: CalendarEvent) => void
 }) {
   const cells = useMemo(() => {
@@ -522,7 +563,12 @@ function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
   const currentMonth = viewDate.getMonth()
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
+      {showEmpty && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <span className="text-sm text-gray-700">No events this month</span>
+        </div>
+      )}
       {/* Day-name header */}
       <div className="flex flex-shrink-0 border-b border-white/10">
         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
@@ -535,12 +581,12 @@ function MonthView({ events, viewDate, todayStr, personById, onEventClick }: {
       {/* 6 × 7 grid */}
       <div className="grid flex-1 overflow-y-auto" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: 'repeat(6, 1fr)' }}>
         {cells.map(day => {
-          const ds         = isoDate(day)
+          const ds         = localIsoDate(day)
           const isToday    = ds === todayStr
           const inMonth    = day.getMonth() === currentMonth
           const dayEvents  = events.filter(e => {
             if (e.allDay) return e.start.slice(0, 10) <= ds && e.end.slice(0, 10) > ds
-            return e.start.slice(0, 10) === ds
+            return eventLocalDate(e.start) === ds
           })
 
           // Deduplicate

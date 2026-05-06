@@ -43,6 +43,7 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
   const [events, setEvents]         = useState<CalendarEvent[]>([])
   const [chores, setChores]         = useState<Record<string, Record<string, boolean>>>({})
   const [loadingCal, setLoadingCal] = useState(false)
+  const [calError,   setCalError]   = useState(false)
   const [showAdmin, setShowAdmin]   = useState(false)
   const [portrait, setPortrait]     = useState(false)
   // Two modal states: details (from tile click) and overlay/assignments (from
@@ -91,6 +92,7 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
 
   const fetchEvents = useCallback(async () => {
     setLoadingCal(true)
+    setCalError(false)
     try {
       let timeMin: Date
       let timeMax: Date
@@ -117,8 +119,16 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
 
       const params = new URLSearchParams({ timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString() })
       const res = await fetch(`/api/calendar?${params}`)
-      if (res.ok) setEvents((await res.json()).events ?? [])
-    } finally { setLoadingCal(false) }
+      if (res.ok) {
+        setEvents((await res.json()).events ?? [])
+      } else {
+        setCalError(true)
+      }
+    } catch {
+      setCalError(true)
+    } finally {
+      setLoadingCal(false)
+    }
   }, [calView, viewDate])
 
   const fetchChores = useCallback(async () => {
@@ -194,6 +204,7 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
           {page === 'calendar' && now && (
             <CalendarView
               events={visibleEvents} people={config.people} loading={loadingCal}
+              hasError={calError}
               now={now} use24h={config.settings?.use24h ?? false}
               calView={calView} viewDate={viewDate}
               portrait={portrait}
@@ -209,6 +220,7 @@ export default function DashboardClient({ userEmail, userName, userPersonId, fam
                 return next
               })}
               onGoToday={() => setViewDate(new Date())}
+              onRetry={fetchEvents}
               onEventClick={setDetailsEvent}
             />
           )}

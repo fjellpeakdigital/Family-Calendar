@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
-import { decryptToken } from '@/lib/crypto'
+import { decryptToken, encryptToken } from '@/lib/crypto'
 import type { CalendarSourceProvider } from '@/lib/supabase/types'
 
 /**
@@ -104,6 +104,8 @@ async function ensureFreshAccessToken(
   if (!tok.refresh_token_enc) return null
   const refresh = decryptToken(tok.refresh_token_enc)
 
+  const supabase = await createClient()
+
   if (provider === 'google') {
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -117,13 +119,24 @@ async function ensureFreshAccessToken(
     })
     if (!resp.ok) return null
     const data = await resp.json()
-    return data.access_token as string
+    const newToken: string = data.access_token
+    const expiresIn: number = data.expires_in ?? 3600
+    await supabase.from('oauth_tokens').update({
+      access_token_enc: encryptToken(newToken),
+      expires_at:       new Date(Date.now() + expiresIn * 1000).toISOString(),
+    }).eq('id', tok.id)
+    return newToken
   }
 
   // microsoft
   const { msRefreshToken } = await import('@/lib/microsoft')
   try {
     const fresh = await msRefreshToken(refresh)
+    await supabase.from('oauth_tokens').update({
+      access_token_enc:  encryptToken(fresh.access_token),
+      refresh_token_enc: fresh.refresh_token ? encryptToken(fresh.refresh_token) : tok.refresh_token_enc,
+      expires_at:        new Date(Date.now() + (fresh.expires_in ?? 3600) * 1000).toISOString(),
+    }).eq('id', tok.id)
     return fresh.access_token
   } catch {
     return null

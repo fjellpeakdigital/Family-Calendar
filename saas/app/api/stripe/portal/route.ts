@@ -22,11 +22,15 @@ export async function POST(req: NextRequest) {
 
   const { data: user } = await supabase
     .from('users')
-    .select('family_id')
+    .select('family_id, role')
     .eq('email', session.user.email)
     .single()
 
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  if (user.role !== 'owner') {
+    return NextResponse.json({ error: 'Only the family owner can manage billing' }, { status: 403 })
+  }
 
   const { data: family } = await supabase
     .from('families')
